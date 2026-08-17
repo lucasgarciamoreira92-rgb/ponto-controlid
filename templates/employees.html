@@ -1,7 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Colaboradores{% endblock %}
 {% block content %}
-<div class="topbar"><div><h1>Colaboradores</h1><p>Cadastros importados do AFD e cadastros manuais.</p></div><a class="button primary" href="/employees/new">+ Adicionar colaborador</a></div>
+<div class="topbar">
+  <div><h1>Colaboradores</h1><p>Cadastros importados do AFD, arquivo TXT/CSV e cadastros manuais.</p></div>
+  <div class="actions">
+    <a class="button ghost" href="/employees/import">Importar TXT/CSV</a>
+    <a class="button primary" href="/employees/new">+ Adicionar colaborador</a>
+  </div>
+</div>
+{% if request.query_params.get('imported') %}
+<div class="notice success">Lista de colaboradores importada com sucesso.</div>
+{% endif %}
 <div class="card"><div class="table-wrap"><table><thead><tr><th>Nome</th><th>Identificador AFD</th><th>Batidas</th><th>Status</th><th></th></tr></thead><tbody>
 {% for e in employees %}<tr><td><strong>{{ e.name }}</strong></td><td>{{ e.external_id or '—' }}</td><td>{{ e.punch_count }}</td><td>{% if e.active %}<span class="badge ok">Ativo</span>{% else %}<span class="badge">Inativo</span>{% endif %}</td><td class="actions"><a href="/employees/{{ e.id }}/edit">Jornada / editar</a><form method="post" action="/employees/{{ e.id }}/toggle"><button class="link-button">{% if e.active %}Inativar{% else %}Ativar{% endif %}</button></form></td></tr>{% else %}<tr><td colspan="5" class="empty">Nenhum colaborador cadastrado.</td></tr>{% endfor %}
 </tbody></table></div></div>
