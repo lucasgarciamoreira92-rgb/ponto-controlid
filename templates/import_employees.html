@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Importar colaboradores{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>Importar colaboradores</h1>
+    <p>Envie um arquivo TXT ou CSV com a lista de colaboradores.</p>
+  </div>
+  <a class="button ghost" href="/employees">Voltar</a>
+</div>
+
+{% if request.query_params.get('ok') %}
+<div class="notice success">
+  Importação concluída: {{ request.query_params.get('created','0') }} criado(s),
+  {{ request.query_params.get('updated','0') }} atualizado(s) e
+  {{ request.query_params.get('skipped','0') }} ignorado(s).
+</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="notice danger">Não foi possível importar o arquivo. Verifique o formato e tente novamente.</div>
+{% endif %}
+
+<div class="card">
+  <h2>Arquivo</h2>
+  <p>Formatos aceitos:</p>
+  <ul>
+    <li><code>Nome do colaborador</code></li>
+    <li><code>CPF/ID;Nome do colaborador</code></li>
+    <li><code>Nome do colaborador;CPF/ID</code></li>
+    <li>Também aceita TAB, vírgula e <code>|</code> como separadores.</li>
+  </ul>
+  <p>Linhas de cabeçalho como <code>Nome;CPF</code> são ignoradas automaticamente.</p>
+
+  <form method="post" action="/employees/import" enctype="multipart/form-data">
+    <label>Selecione o arquivo
+      <input type="file" name="file" accept=".txt,.csv,text/plain,text/csv" required>
+    </label>
+    <div class="savebar"><button class="button primary" type="submit">Importar colaboradores</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Como o sistema trata duplicados</h2>
+  <p>Quando houver identificador AFD/CPF/ID, ele será usado como chave principal. Se o colaborador já existir, o nome será atualizado e o cadastro será reativado.</p>
+  <p>Quando o arquivo tiver apenas nomes, o sistema procura um nome igual (ignorando maiúsculas/minúsculas). Se encontrar, reativa o cadastro; caso contrário, cria um novo colaborador.</p>
+</div>
+{% endblock %}
