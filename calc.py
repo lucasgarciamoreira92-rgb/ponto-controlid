@@ -65,13 +65,20 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     worked = worked_minutes(pairs)
     min_interval = interval_minutes(pairs)
 
+    schedule_configured = schedule is not None
     is_workday = bool(schedule and int(schedule["is_workday"]))
     expected = int(schedule["expected_minutes"]) if schedule and is_workday else 0
     holiday = settings.get("consider_holidays", "1") == "1" and day.isoformat() in holidays
     tolerance = int(settings.get("daily_tolerance_minutes", 0) or 0)
 
-    raw_delta = worked - expected if is_workday else worked
-    delta = 0 if abs(raw_delta) <= tolerance else raw_delta
+    # Sem jornada configurada, preserva as batidas e o total trabalhado para conferência,
+    # mas não transforma esse tempo em horas extras/faltas/banco automaticamente.
+    if schedule_configured:
+        raw_delta = worked - expected if is_workday else worked
+        delta = 0 if abs(raw_delta) <= tolerance else raw_delta
+    else:
+        raw_delta = 0
+        delta = 0
 
     overtime_weekday = 0
     overtime_saturday = 0
@@ -79,7 +86,7 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     shortage = 0
     bank = 0
     missing_punches = is_workday and not punches
-    review_required = incomplete or missing_punches
+    review_required = incomplete or missing_punches or not schedule_configured
 
     if not review_required:
         if settings.get("bank_hours_enabled") == "1":
@@ -95,6 +102,8 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
             shortage = abs(delta)
 
     status = []
+    if not schedule_configured:
+        status.append("Jornada não configurada")
     if incomplete:
         status.append("Marcação incompleta")
     if missing_punches:
