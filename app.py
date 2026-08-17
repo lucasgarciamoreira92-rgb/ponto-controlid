@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from db import init_db, connect, get_settings
 from parser_afd import parse_afd, normalize_external_id
+from parser_colaboradores import parse_employee_list
 from calc import analyze_day, derive_expected_minutes, hm, month_dates
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -162,6 +163,97 @@ def employees_page(request: Request):
     with connect() as conn:
         employees = conn.execute("SELECT e.*, COUNT(p.id) AS punch_count FROM employees e LEFT JOIN punches p ON p.employee_id=e.id GROUP BY e.id ORDER BY e.active DESC, e.name").fetchall()
     return templates.TemplateResponse("employees.html", {"request": request, "employees": employees})
+
+
+@app.get("/employees/import", response_class=HTMLResponse)
+def employee_import_page(request: Request):
+    return templates.TemplateResponse("import_employees.html", {"request": request})
+
+
+@app.post("/employees/import")
+async def employee_import(file: UploadFile = File(...)):
+    if not file.filename:
+        return RedirectResponse("/employees/import?error=arquivo", status_code=303)
+
+    content = await file.read()
+    if not content:
+        return RedirectResponse("/employees/import?error=vazio", status_code=303)
+
+    parsed = parse_employee_list(content)
+    if not parsed.rows:
+        return RedirectResponse(f"/employees/import?error=formato&skipped={len(parsed.warnings)}", status_code=303)
+
+    created = 0
+    updated = 0
+    skipped = len(parsed.warnings)
+    seen_ids: set[str] = set()
+    seen_names: set[str] = set()
+
+    with connect() as conn:
+        for row in parsed.rows:
+            normalized_name = " ".join(row.name.split()).strip()
+            name_key = normalized_name.casefold()
+            ext = normalize_external_id(row.external_id or "") or None
+
+            # Não processa linhas duplicadas dentro do mesmo arquivo mais de uma vez.
+            if ext and ext in seen_ids:
+                skipped += 1
+                continue
+            if not ext and name_key in seen_names:
+                skipped += 1
+                continue
+            if ext:
+                seen_ids.add(ext)
+            else:
+                seen_names.add(name_key)
+
+            try:
+                if ext:
+                    existing = conn.execute("SELECT id FROM employees WHERE external_id=?", (ext,)).fetchone()
+                    if existing:
+                        conn.execute(
+                            "UPDATE employees SET name=?, active=1, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                            (normalized_name, existing["id"]),
+                        )
+                        updated += 1
+                        continue
+
+                    # Se já existe manualmente pelo mesmo nome e ainda não tem identificador,
+                    # associa o identificador em vez de criar um cadastro duplicado.
+                    by_name = conn.execute(
+                        "SELECT id FROM employees WHERE lower(name)=lower(?) AND (external_id IS NULL OR external_id='') ORDER BY id LIMIT 1",
+                        (normalized_name,),
+                    ).fetchone()
+                    if by_name:
+                        conn.execute(
+                            "UPDATE employees SET external_id=?, name=?, active=1, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                            (ext, normalized_name, by_name["id"]),
+                        )
+                        updated += 1
+                    else:
+                        conn.execute("INSERT INTO employees(external_id, name, active) VALUES (?,?,1)", (ext, normalized_name))
+                        created += 1
+                else:
+                    existing = conn.execute(
+                        "SELECT id FROM employees WHERE lower(name)=lower(?) ORDER BY id LIMIT 1",
+                        (normalized_name,),
+                    ).fetchone()
+                    if existing:
+                        conn.execute(
+                            "UPDATE employees SET active=1, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                            (existing["id"],),
+                        )
+                        updated += 1
+                    else:
+                        conn.execute("INSERT INTO employees(external_id, name, active) VALUES (NULL,?,1)", (normalized_name,))
+                        created += 1
+            except sqlite3.IntegrityError:
+                skipped += 1
+
+    return RedirectResponse(
+        f"/employees/import?ok=1&created={created}&updated={updated}&skipped={skipped}",
+        status_code=303,
+    )
 
 
 @app.get("/employees/new", response_class=HTMLResponse)
