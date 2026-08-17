@@ -4,7 +4,7 @@
 <div class="topbar">
   <div>
     <h1>Importar colaboradores</h1>
-    <p>Envie um arquivo TXT ou CSV com a lista de colaboradores.</p>
+    <p>Envie o <strong>usuarios.txt</strong> exportado diretamente pela Control iD.</p>
   </div>
   <a class="button ghost" href="/employees">Voltar</a>
 </div>
@@ -21,22 +21,28 @@
 {% endif %}
 
 <div class="card">
-  <h2>Arquivo</h2>
-  <p>Formatos aceitos:</p>
+  <h2>Formato nativo Control iD</h2>
+  <p>O sistema reconhece automaticamente o arquivo com o cabeçalho:</p>
+  <p><code>cpf;nome;administrador;matricula;rfid;codigo;senha;barras;digitais</code></p>
+  <p>Para o cadastro são utilizados somente <strong>cpf</strong> e <strong>nome</strong>. Os demais campos, inclusive biometria/digitais e senha, não são armazenados.</p>
+  <p>O CPF/identificador é convertido automaticamente para o padrão de 12 dígitos usado pelo AFD do relógio. Ex.: <code>3526693064 → 003526693064</code>.</p>
+
+  <form method="post" action="/employees/import" enctype="multipart/form-data">
+    <label>Selecione o usuarios.txt
+      <input type="file" name="file" accept=".txt,.csv,text/plain,text/csv" required>
+    </label>
+    <div class="savebar"><button class="button primary" type="submit">Importar colaboradores</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Outros formatos continuam aceitos</h2>
   <ul>
     <li><code>Nome do colaborador</code></li>
     <li><code>CPF/ID;Nome do colaborador</code></li>
     <li><code>Nome do colaborador;CPF/ID</code></li>
     <li>Também aceita TAB, vírgula e <code>|</code> como separadores.</li>
   </ul>
-  <p>Linhas de cabeçalho como <code>Nome;CPF</code> são ignoradas automaticamente.</p>
-
-  <form method="post" action="/employees/import" enctype="multipart/form-data">
-    <label>Selecione o arquivo
-      <input type="file" name="file" accept=".txt,.csv,text/plain,text/csv" required>
-    </label>
-    <div class="savebar"><button class="button primary" type="submit">Importar colaboradores</button></div>
-  </form>
 </div>
 
 <div class="card">
