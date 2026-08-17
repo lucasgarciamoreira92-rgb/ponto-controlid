@@ -11,10 +11,12 @@
   <label class="check"><input type="checkbox" name="active" {% if not employee or employee.active %}checked{% endif %}> Colaborador ativo</label>
 </div>
 <div class="card"><div class="section-head"><div><h2>Jornada semanal</h2><p>Defina cada dia individualmente. Se os horários forem preenchidos, a carga diária é calculada automaticamente.</p></div></div>
+<div class="schedule-scroll">
 <div class="schedule-grid header"><span>Dia</span><span>Trabalha</span><span>Entrada 1</span><span>Saída 1</span><span>Entrada 2</span><span>Saída 2</span><span>Carga manual (h)</span></div>
 {% for wd,label in weekdays %}{% set s=schedules.get(wd) %}
 <div class="schedule-grid"><strong>{{ label }}</strong><label class="switch"><input type="checkbox" name="d{{wd}}_active" {% if s and s.is_workday %}checked{% endif %}><span></span></label><input type="time" name="d{{wd}}_start1" value="{{ s.start1 if s and s.start1 else '' }}"><input type="time" name="d{{wd}}_end1" value="{{ s.end1 if s and s.end1 else '' }}"><input type="time" name="d{{wd}}_start2" value="{{ s.start2 if s and s.start2 else '' }}"><input type="time" name="d{{wd}}_end2" value="{{ s.end2 if s and s.end2 else '' }}"><input type="number" step="0.01" min="0" max="24" name="d{{wd}}_hours" value="{{ '%.2f'|format((s.expected_minutes or 0)/60) if s else '' }}"></div>
 {% endfor %}
+</div>
 </div>
 <div class="savebar"><button class="button primary" type="submit">Salvar colaborador e jornada</button></div>
 </form>
