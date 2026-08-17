@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Configurações{% endblock %}
+{% block content %}
+<div class="topbar"><div><h1>Configurações</h1><p>Regras de apuração editáveis, sem deixar o cálculo engessado.</p></div></div>
+{% if request.query_params.get('saved') %}<div class="notice success">Configurações salvas.</div>{% endif %}
+<form method="post">
+<div class="card"><h2>Empresa e tolerâncias</h2><div class="form-grid two">
+<label>Nome da empresa / painel<input name="company_name" value="{{ settings.company_name }}"></label>
+<label>Tolerância diária (minutos)<input type="number" min="0" name="daily_tolerance_minutes" value="{{ settings.daily_tolerance_minutes }}"></label>
+<label>Intervalo mínimo (minutos)<input type="number" min="0" name="min_interval_minutes" value="{{ settings.min_interval_minutes }}"></label>
+</div></div>
+<div class="card"><h2>Horas extras</h2><div class="form-grid three">
+<label>HE dias úteis (%)<input type="number" min="0" name="overtime_weekday_percent" value="{{ settings.overtime_weekday_percent }}"></label>
+<label>HE sábado (%)<input type="number" min="0" name="overtime_saturday_percent" value="{{ settings.overtime_saturday_percent }}"></label>
+<label>HE domingo/feriado (%)<input type="number" min="0" name="overtime_sunday_holiday_percent" value="{{ settings.overtime_sunday_holiday_percent }}"></label>
+<label class="check"><input type="checkbox" name="bank_hours_enabled" {% if settings.bank_hours_enabled=='1' %}checked{% endif %}> Usar banco de horas</label>
+<label class="check"><input type="checkbox" name="consider_holidays" {% if settings.consider_holidays=='1' %}checked{% endif %}> Considerar feriados cadastrados</label>
+</div></div>
+<div class="card"><h2>Faixa noturna</h2><div class="form-grid three"><label class="check"><input type="checkbox" name="night_shift_enabled" {% if settings.night_shift_enabled=='1' %}checked{% endif %}> Habilitar controle noturno</label><label>Início<input type="time" name="night_start" value="{{ settings.night_start }}"></label><label>Fim<input type="time" name="night_end" value="{{ settings.night_end }}"></label></div><p class="help">Nesta primeira versão a faixa noturna fica cadastrada para evolução do cálculo; a apuração de adicional noturno não é aplicada automaticamente ainda.</p></div>
+<div class="card"><h2>Feriados</h2><p class="help">Um por linha no formato <code>AAAA-MM-DD | Descrição</code>.</p><textarea name="holidays" rows="8" placeholder="2026-09-20 | Revolução Farroupilha">{{ holiday_text }}</textarea></div>
+<div class="savebar"><button class="button primary" type="submit">Salvar configurações</button></div>
+</form>
+{% endblock %}

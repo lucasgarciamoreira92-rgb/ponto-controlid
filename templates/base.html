@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Ponto Control iD{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span><div><strong>PONTO</strong><small>Control iD Local</small></div></div>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/import">Importar AFD</a>
+      <a href="/employees">Colaboradores</a>
+      <a href="/settings">Configurações</a>
+    </nav>
+    <div class="sidebar-foot">Dados armazenados localmente<br><span>SQLite + AFD original</span></div>
+  </aside>
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+</div>
+</body>
+</html>

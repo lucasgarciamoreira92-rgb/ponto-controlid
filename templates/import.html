@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Importar AFD{% endblock %}
+{% block content %}
+<div class="topbar"><div><h1>Importar AFD</h1><p>Envie o arquivo bruto exportado pelo relógio Control iD.</p></div></div>
+{% if request.query_params.get('ok') %}<div class="notice success">Importação concluída: {{ request.query_params.get('ok') }} batidas novas.</div>{% endif %}
+{% if request.query_params.get('duplicate') %}<div class="notice">Este arquivo já foi importado. Nenhuma batida foi duplicada.</div>{% endif %}
+<div class="card upload-card">
+  <form method="post" enctype="multipart/form-data">
+    <label class="dropzone"><input type="file" name="file" accept=".txt,.afd" required><strong>Selecionar arquivo AFD/TXT</strong><span>O arquivo original será preservado em /uploads.</span></label>
+    <button class="button primary" type="submit">Importar arquivo</button>
+  </form>
+</div>
+<div class="card"><h2>Histórico</h2><div class="table-wrap"><table><thead><tr><th>Data</th><th>Arquivo</th><th>Equipamento</th><th>Linhas</th><th>Batidas novas</th><th>Registros de colaboradores</th></tr></thead><tbody>
+{% for i in imports %}<tr><td>{{ i.imported_at }}</td><td>{{ i.original_filename }}</td><td>{{ i.device_model or '—' }}</td><td>{{ i.total_lines }}</td><td>{{ i.punch_count }}</td><td>{{ i.employee_records }}</td></tr>{% else %}<tr><td colspan="6" class="empty">Nenhuma importação.</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

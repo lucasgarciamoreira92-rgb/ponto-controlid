@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Dashboard | Ponto{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div><h1>Dashboard</h1><p>Apuração mensal de jornada e horas extras.</p></div>
+  <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Atualizar</button></form>
+</div>
+<div class="cards">
+  <div class="card metric"><span>Horas trabalhadas</span><strong>{{ totals.worked|hm }}</strong></div>
+  {% if settings.bank_hours_enabled == '1' %}
+  <div class="card metric"><span>Saldo banco</span><strong>{{ totals.bank|hm }}</strong></div>
+  {% else %}
+  <div class="card metric"><span>HE {{ settings.overtime_weekday_percent }}% · dias úteis</span><strong>{{ totals.overtime_weekday|hm }}</strong></div>
+  <div class="card metric"><span>HE {{ settings.overtime_saturday_percent }}% · sábado</span><strong>{{ totals.overtime_saturday|hm }}</strong></div>
+  <div class="card metric"><span>HE {{ settings.overtime_sunday_holiday_percent }}% · dom/feriado</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
+  {% endif %}
+  <div class="card metric"><span>Divergências</span><strong>{{ totals.issues }}</strong></div>
+</div>
+<div class="card">
+  <div class="section-head"><div><h2>Colaboradores</h2><p>Resumo da competência {{ month }}.</p></div><a class="button ghost" href="/employees">Gerenciar</a></div>
+  <div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Trabalhado</th>{% if settings.bank_hours_enabled == '1' %}<th>Banco</th>{% else %}<th>HE {{ settings.overtime_weekday_percent }}%</th><th>HE sáb {{ settings.overtime_saturday_percent }}%</th><th>HE dom/fer {{ settings.overtime_sunday_holiday_percent }}%</th><th>Débitos</th>{% endif %}<th>Divergências</th><th></th></tr></thead><tbody>
+  {% for s in summaries %}
+  <tr><td><strong>{{ s.employee.name }}</strong><small>{{ s.employee.external_id or 'sem identificador AFD' }}</small></td><td>{{ s.worked|hm }}</td>{% if settings.bank_hours_enabled == '1' %}<td class="positive">{{ s.bank|hm }}</td>{% else %}<td class="positive">{{ s.overtime_weekday|hm }}</td><td class="positive">{{ s.overtime_saturday|hm }}</td><td class="positive">{{ s.overtime_sunday_holiday|hm }}</td><td class="negative">{{ s.shortage|hm }}</td>{% endif %}<td>{% if s.issues %}<span class="badge warn">{{ s.issues }}</span>{% else %}<span class="badge ok">OK</span>{% endif %}</td><td><a href="/report/{{ s.employee.id }}?month={{ month }}">Detalhes →</a></td></tr>
+  {% else %}<tr><td colspan="9" class="empty">Importe um AFD ou cadastre um colaborador.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% if last_import %}<p class="footnote">Última importação: <strong>{{ last_import.original_filename }}</strong> · {{ last_import.punch_count }} batidas novas · {{ last_import.device_model or 'equipamento não identificado' }}</p>{% endif %}
+{% endblock %}
