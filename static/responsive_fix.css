@@ -1,0 +1,8 @@
+.schedule-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.schedule-scroll .schedule-grid{min-width:900px}
+@media(max-width:1000px){
+  .schedule-scroll .schedule-grid{grid-template-columns:130px 80px repeat(4,minmax(110px,1fr)) 140px;min-width:900px}
+  .schedule-scroll .schedule-grid>*:nth-child(5),
+  .schedule-scroll .schedule-grid>*:nth-child(6),
+  .schedule-scroll .schedule-grid>*:nth-child(7){display:block}
+}
