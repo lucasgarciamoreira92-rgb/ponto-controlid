@@ -10,14 +10,60 @@
   <label>Identificador no AFD<input name="external_id" value="{{ employee.external_id if employee else '' }}" placeholder="Ex.: 002546123009"></label>
   <label class="check"><input type="checkbox" name="active" {% if not employee or employee.active %}checked{% endif %}> Colaborador ativo</label>
 </div>
-<div class="card"><div class="section-head"><div><h2>Jornada semanal</h2><p>Defina cada dia individualmente. Se os horários forem preenchidos, a carga diária é calculada automaticamente.</p></div></div>
-<div class="schedule-scroll">
-<div class="schedule-grid header"><span>Dia</span><span>Trabalha</span><span>Entrada 1</span><span>Saída 1</span><span>Entrada 2</span><span>Saída 2</span><span>Carga manual (h)</span></div>
-{% for wd,label in weekdays %}{% set s=schedules.get(wd) %}
-<div class="schedule-grid"><strong>{{ label }}</strong><label class="switch"><input type="checkbox" name="d{{wd}}_active" {% if s and s.is_workday %}checked{% endif %}><span></span></label><input type="time" name="d{{wd}}_start1" value="{{ s.start1 if s and s.start1 else '' }}"><input type="time" name="d{{wd}}_end1" value="{{ s.end1 if s and s.end1 else '' }}"><input type="time" name="d{{wd}}_start2" value="{{ s.start2 if s and s.start2 else '' }}"><input type="time" name="d{{wd}}_end2" value="{{ s.end2 if s and s.end2 else '' }}"><input type="number" step="0.01" min="0" max="24" name="d{{wd}}_hours" value="{{ '%.2f'|format((s.expected_minutes or 0)/60) if s else '' }}"></div>
-{% endfor %}
-</div>
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>Jornada semanal</h2>
+      <p>Preencha a segunda-feira e use o preenchimento rápido para copiar os mesmos horários até sexta. Depois, qualquer dia pode ser alterado individualmente.</p>
+    </div>
+  </div>
+
+  <div class="notice" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+    <div>
+      <strong>Preenchimento rápido — Segunda a sexta</strong>
+      <div class="help" style="margin-top:4px;">Configure a linha de segunda-feira e clique no botão. Terça, quarta, quinta e sexta receberão a mesma jornada.</div>
+    </div>
+    <button class="button primary" type="button" id="copy-monday-weekdays">Copiar segunda para terça–sexta</button>
+  </div>
+
+  <div class="schedule-scroll">
+    <div class="schedule-grid header"><span>Dia</span><span>Trabalha</span><span>Entrada 1</span><span>Saída 1</span><span>Entrada 2</span><span>Saída 2</span><span>Carga manual (h)</span></div>
+    {% for wd,label in weekdays %}{% set s=schedules.get(wd) %}
+    <div class="schedule-grid"><strong>{{ label }}</strong><label class="switch"><input type="checkbox" name="d{{wd}}_active" {% if s and s.is_workday %}checked{% endif %}><span></span></label><input type="time" name="d{{wd}}_start1" value="{{ s.start1 if s and s.start1 else '' }}"><input type="time" name="d{{wd}}_end1" value="{{ s.end1 if s and s.end1 else '' }}"><input type="time" name="d{{wd}}_start2" value="{{ s.start2 if s and s.start2 else '' }}"><input type="time" name="d{{wd}}_end2" value="{{ s.end2 if s and s.end2 else '' }}"><input type="number" step="0.01" min="0" max="24" name="d{{wd}}_hours" value="{{ '%.2f'|format((s.expected_minutes or 0)/60) if s else '' }}"></div>
+    {% endfor %}
+  </div>
 </div>
 <div class="savebar"><button class="button primary" type="submit">Salvar colaborador e jornada</button></div>
 </form>
+
+<script>
+(function () {
+  const button = document.getElementById('copy-monday-weekdays');
+  if (!button) return;
+
+  button.addEventListener('click', function () {
+    const fields = ['active', 'start1', 'end1', 'start2', 'end2', 'hours'];
+
+    for (let day = 1; day <= 4; day++) {
+      fields.forEach(function (field) {
+        const source = document.querySelector('[name="d0_' + field + '"]');
+        const target = document.querySelector('[name="d' + day + '_' + field + '"]');
+        if (!source || !target) return;
+
+        if (field === 'active') {
+          target.checked = source.checked;
+        } else {
+          target.value = source.value;
+        }
+      });
+    }
+
+    const originalText = button.textContent;
+    button.textContent = 'Jornada copiada ✓';
+    setTimeout(function () {
+      button.textContent = originalText;
+    }, 1600);
+  });
+})();
+</script>
 {% endblock %}
