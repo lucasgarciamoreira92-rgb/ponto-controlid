@@ -97,10 +97,113 @@ def _expected_punch_count(day: date, schedule, is_workday: bool, saturday_standa
     return count
 
 
+def _scheduled_marking_datetimes(day: date, schedule, expected_minutes: int) -> list[datetime]:
+    """Monta as marcações contratuais do dia quando a jornada é inequívoca.
+
+    A tolerância legal só é aplicada quando os horários cadastrados representam
+    exatamente a carga normal usada na apuração. Isso evita, por exemplo,
+    normalizar um sábado de 4h contra um cadastro antigo de 8h.
+    """
+    if schedule is None:
+        return []
+
+    start1 = schedule["start1"]
+    end1 = schedule["end1"]
+    start2 = schedule["start2"]
+    end2 = schedule["end2"]
+
+    if bool(start1) != bool(end1) or bool(start2) != bool(end2):
+        return []
+
+    values: list[str] = []
+    if start1 and end1:
+        values.extend([start1, end1])
+    if start2 and end2:
+        values.extend([start2, end2])
+    if not values:
+        return []
+
+    scheduled_minutes = derive_expected_minutes(start1, end1, start2, end2, 0)
+    if scheduled_minutes != int(expected_minutes or 0):
+        return []
+
+    result: list[datetime] = []
+    day_offset = 0
+    previous_clock = None
+    for value in values:
+        try:
+            hour, minute = map(int, str(value).split(":"))
+        except (TypeError, ValueError):
+            return []
+        clock = hour * 60 + minute
+        if previous_clock is not None and clock < previous_clock:
+            day_offset += 1
+        result.append(
+            datetime.combine(day, time(hour=hour, minute=minute))
+            + timedelta(days=day_offset)
+        )
+        previous_clock = clock
+    return result
+
+
+def _apply_clt_marking_tolerance(
+    day: date,
+    punches: list[datetime],
+    schedule,
+    expected_minutes: int,
+    is_workday: bool,
+    holiday: bool,
+    settings: dict,
+):
+    """Aplica a tolerância do art. 58, §1º, da CLT sobre as marcações.
+
+    Regra conservadora adotada:
+    - cada variação deve ser de no máximo 5 min (configurável internamente);
+    - a soma absoluta das variações do dia deve ser de no máximo 10 min;
+    - satisfeitos ambos os limites, as marcações são normalizadas para os
+      horários contratuais somente para o cálculo;
+    - ultrapassado qualquer limite, as marcações reais são usadas integralmente.
+
+    As marcações originais permanecem preservadas e continuam sendo exibidas.
+    """
+    if settings.get("tolerance_rule_version") != "clt_marking_v1":
+        return punches, False, 0, []
+    if not is_workday or holiday or day.weekday() == 6 or not punches:
+        return punches, False, 0, []
+
+    expected_points = _scheduled_marking_datetimes(day, schedule, expected_minutes)
+    if not expected_points or len(punches) != len(expected_points):
+        return punches, False, 0, []
+
+    try:
+        per_mark_limit = max(0, int(settings.get("marking_tolerance_minutes", 5) or 5))
+        daily_limit = max(0, int(settings.get("daily_marking_tolerance_minutes", 10) or 10))
+    except (TypeError, ValueError):
+        per_mark_limit = 5
+        daily_limit = 10
+
+    ordered = sorted(punches)
+    variations = [
+        int((actual - planned).total_seconds() / 60)
+        for actual, planned in zip(ordered, expected_points)
+    ]
+    total_variation = sum(abs(value) for value in variations)
+    within_limits = (
+        all(abs(value) <= per_mark_limit for value in variations)
+        and total_variation <= daily_limit
+    )
+
+    if within_limits:
+        return expected_points, any(variations), total_variation, variations
+    return punches, False, total_variation, variations
+
+
 def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, holidays: set[str]):
-    pairs, odd_punch_count = pair_punches(punches)
-    worked = worked_minutes(pairs)
-    min_interval = interval_minutes(pairs)
+    # As batidas originais são sempre preservadas. Pares/intervalo abaixo são
+    # usados para conferência operacional e nunca substituem o AFD.
+    raw_pairs, odd_punch_count = pair_punches(punches)
+    raw_worked = worked_minutes(raw_pairs)
+    min_interval = interval_minutes(raw_pairs)
 
     schedule_configured = schedule is not None
     saturday_standard = _saturday_standard_minutes(settings)
@@ -130,12 +233,32 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     )
     incomplete = forgotten_punch
 
-    tolerance = int(settings.get("daily_tolerance_minutes", 0) or 0)
+    effective_punches, tolerance_applied, tolerance_variation_minutes, tolerance_variations = (
+        _apply_clt_marking_tolerance(
+            day,
+            punches,
+            schedule,
+            expected,
+            is_workday,
+            holiday,
+            settings,
+        )
+    )
+    calculation_pairs, _ = pair_punches(effective_punches)
+    worked = worked_minutes(calculation_pairs)
+
     daily_limit = _daily_overtime_limit(settings)
 
     if schedule_configured:
         raw_delta = worked - expected if is_workday else worked
-        delta = 0 if abs(raw_delta) <= tolerance else raw_delta
+        # Competências fechadas antes da adoção da regra CLT por marcação não
+        # possuem tolerance_rule_version no snapshot. Para elas preservamos o
+        # cálculo legado, evitando alteração retroativa de mês finalizado.
+        if settings.get("tolerance_rule_version") == "clt_marking_v1":
+            delta = raw_delta
+        else:
+            legacy_tolerance = int(settings.get("daily_tolerance_minutes", 0) or 0)
+            delta = 0 if abs(raw_delta) <= legacy_tolerance else raw_delta
     else:
         raw_delta = 0
         delta = 0
@@ -195,7 +318,9 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
         "date": day,
         "weekday": WEEKDAY_NAMES[day.weekday()],
         "punches": punches,
-        "pairs": pairs,
+        "pairs": raw_pairs,
+        "calculation_pairs": calculation_pairs,
+        "raw_worked": raw_worked,
         "worked": worked,
         "expected": expected,
         "delta": delta,
@@ -213,6 +338,9 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
         "expected_punches": expected_punches,
         "is_workday": is_workday,
         "holiday": holiday,
+        "tolerance_applied": tolerance_applied,
+        "tolerance_variation_minutes": tolerance_variation_minutes,
+        "tolerance_variations": tolerance_variations,
         "status": ", ".join(status),
     }
 
