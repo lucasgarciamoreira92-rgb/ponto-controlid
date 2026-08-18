@@ -76,14 +76,40 @@ def _daily_overtime_limit(settings: dict) -> int | None:
     return max(0, value)
 
 
+def _saturday_standard_minutes(settings: dict) -> int | None:
+    """Retorna a jornada normal de sábado vigente na competência.
+
+    A ausência da chave identifica snapshots antigos e preserva o previsto que
+    estava salvo na jornada mensal daquele fechamento.
+    """
+    raw = settings.get("saturday_standard_minutes")
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return max(0, value)
+
+
 def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, holidays: set[str]):
     pairs, incomplete = pair_punches(punches)
     worked = worked_minutes(pairs)
     min_interval = interval_minutes(pairs)
 
     schedule_configured = schedule is not None
-    is_workday = bool(schedule and int(schedule["is_workday"]))
-    expected = int(schedule["expected_minutes"]) if schedule and is_workday else 0
+    saturday_standard = _saturday_standard_minutes(settings)
+
+    # Nas competências com a regra empresarial de sábado, a jornada normal de
+    # sábado é definida pela configuração global (atualmente 240 min = 4h),
+    # independentemente da carga que tenha sido sugerida pelo AFD.
+    if day.weekday() == 5 and saturday_standard is not None and schedule_configured:
+        is_workday = True
+        expected = saturday_standard
+    else:
+        is_workday = bool(schedule and int(schedule["is_workday"]))
+        expected = int(schedule["expected_minutes"]) if schedule and is_workday else 0
+
     holiday = settings.get("consider_holidays", "1") == "1" and day.isoformat() in holidays
     tolerance = int(settings.get("daily_tolerance_minutes", 0) or 0)
     daily_limit = _daily_overtime_limit(settings)
