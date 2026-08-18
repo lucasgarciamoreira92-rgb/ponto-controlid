@@ -73,5 +73,24 @@
     </div>
   </main>
 </div>
+
+<script>
+(function () {
+  document.querySelectorAll('.month-form').forEach(function (form) {
+    const input = form.querySelector('input[type="month"][name="month"]');
+    if (!input) return;
+
+    form.querySelectorAll('button[type="submit"], button:not([type])').forEach(function (button) {
+      button.remove();
+    });
+
+    if (!input.hasAttribute('onchange')) {
+      input.addEventListener('change', function () {
+        form.requestSubmit();
+      });
+    }
+  });
+})();
+</script>
 </body>
 </html>
