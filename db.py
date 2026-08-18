@@ -1,10 +1,16 @@
 from __future__ import annotations
 import sqlite3
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "data" / "ponto.db"
+from app_paths import DB_PATH
+
+
+# O aplicativo é local e o SQLite é pequeno. Serializar o acesso deixa backup e
+# restauração seguros inclusive quando a sincronização automática do REP estiver
+# ativa em outra thread.
+DB_LOCK = threading.RLock()
 
 DEFAULT_SETTINGS = {
     "company_name": "Controle de Ponto",
@@ -133,18 +139,20 @@ CREATE INDEX IF NOT EXISTS idx_punches_external_date ON punches(external_id, pun
 CREATE INDEX IF NOT EXISTS idx_monthly_schedules_employee_month ON monthly_schedules(employee_id, month);
 '''
 
+
 @contextmanager
 def connect(db_path: Path | str | None = None):
     path = Path(db_path) if db_path else DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    with DB_LOCK:
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def init_db(db_path: Path | str | None = None):
