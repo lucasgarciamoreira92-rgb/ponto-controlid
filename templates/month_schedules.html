@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Jornadas do mês | Ponto{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>Jornadas da competência</h1>
+    <p>Defina qual jornada será usada na apuração de {{ month }}.</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Alterar mês</button></form>
+    <a class="button ghost" href="/?month={{ month }}">Voltar ao Dashboard</a>
+  </div>
+</div>
+
+{% if request.query_params.get('copied') %}
+<div class="notice success">
+  Jornadas padrão aplicadas a {{ request.query_params.get('copied','0') }} colaborador(es). 
+  {{ request.query_params.get('skipped','0') }} já estavam configurados ou ainda não possuem jornada padrão.
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>Preenchimento rápido da competência</h2>
+      <p>Copia a jornada padrão de cada colaborador para {{ month }} somente quando a competência ainda não estiver configurada.</p>
+    </div>
+    <form method="post" action="/month-schedules/copy-defaults">
+      <input type="hidden" name="month" value="{{ month }}">
+      <button class="button primary" type="submit">Aplicar jornadas padrão ao mês</button>
+    </form>
+  </div>
+  <p class="footnote">Esse botão não sobrescreve jornadas mensais já salvas. Assim, uma alteração manual feita nesta competência é preservada.</p>
+</div>
+
+<div class="card">
+  <div class="section-head"><div><h2>Colaboradores</h2><p>Depois de configurada, a jornada de {{ month }} fica independente da jornada padrão.</p></div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Colaborador</th><th>Jornada padrão</th><th>Competência {{ month }}</th><th></th></tr></thead>
+      <tbody>
+      {% for employee in employees %}
+      <tr>
+        <td><strong>{{ employee.name }}</strong><small>{{ employee.external_id or 'sem identificador AFD' }}</small></td>
+        <td>{% if employee.has_default_schedule %}<span class="badge ok">Disponível</span>{% else %}<span class="badge warn">Não cadastrada</span>{% endif %}</td>
+        <td>{% if employee.has_month_schedule %}<span class="badge ok">Configurada</span>{% else %}<span class="badge warn">Pendente</span>{% endif %}</td>
+        <td><a class="button ghost" href="/month-schedules/{{ employee.id }}?month={{ month }}">{% if employee.has_month_schedule %}Editar jornada do mês{% else %}Configurar jornada{% endif %}</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">Nenhum colaborador ativo.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
