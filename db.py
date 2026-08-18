@@ -63,6 +63,13 @@ CREATE TABLE IF NOT EXISTS monthly_schedules (
     FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS month_closures (
+    month TEXT PRIMARY KEY,
+    finalized_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    settings_json TEXT NOT NULL,
+    holidays_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
