@@ -3,7 +3,9 @@
 {% block content %}
 <div class="topbar"><div><h1>{{ employee.name }}</h1><p>Apuração individual por batidas do AFD.</p></div><form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Atualizar</button></form></div>
 
-{% if not month_configured %}
+{% if closure %}
+<div class="notice success"><strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong><div class="help" style="margin-top:4px;">Este relatório usa a jornada, regras, feriados e batidas congelados no fechamento em {{ closure.finalized_at }}.</div></div>
+{% elif not month_configured %}
 <div class="notice" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
   <div>
     <strong>Jornada de {{ month }} ainda não configurada</strong>
