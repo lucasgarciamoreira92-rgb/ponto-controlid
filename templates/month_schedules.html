@@ -12,13 +12,31 @@
   </div>
 </div>
 
+{% if closure %}
+<div class="notice success">
+  <strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong>
+  <div class="help" style="margin-top:4px;">Fechada em {{ closure.finalized_at }}. Jornadas, regras, feriados e o conjunto de batidas considerado nesta competência estão congelados.</div>
+</div>
+{% elif request.query_params.get('finalized') %}
+<div class="notice success"><strong>Competência {{ month }} finalizada com sucesso.</strong></div>
+{% endif %}
+
+{% if request.query_params.get('locked') %}
+<div class="notice">Esta competência já está finalizada e não aceita alterações.</div>
+{% endif %}
+{% if request.query_params.get('error') == 'missing' %}
+<div class="notice">Não foi possível finalizar: {{ request.query_params.get('missing','0') }} colaborador(es) com batidas ainda estão sem jornada definida nesta competência.</div>
+{% elif request.query_params.get('error') == 'future' %}
+<div class="notice">Uma competência futura não pode ser finalizada.</div>
+{% endif %}
 {% if request.query_params.get('copied') %}
 <div class="notice success">
-  Jornadas padrão aplicadas a {{ request.query_params.get('copied','0') }} colaborador(es). 
+  Jornadas padrão aplicadas a {{ request.query_params.get('copied','0') }} colaborador(es).
   {{ request.query_params.get('skipped','0') }} já estavam configurados ou ainda não possuem jornada padrão.
 </div>
 {% endif %}
 
+{% if not closure %}
 <div class="card">
   <div class="section-head">
     <div>
@@ -30,11 +48,12 @@
       <button class="button primary" type="submit">Aplicar jornadas padrão ao mês</button>
     </form>
   </div>
-  <p class="footnote">Esse botão não sobrescreve jornadas mensais já salvas. Assim, uma alteração manual feita nesta competência é preservada.</p>
+  <p class="footnote">Esse botão não sobrescreve jornadas mensais já salvas.</p>
 </div>
+{% endif %}
 
 <div class="card">
-  <div class="section-head"><div><h2>Colaboradores</h2><p>Depois de configurada, a jornada de {{ month }} fica independente da jornada padrão.</p></div></div>
+  <div class="section-head"><div><h2>Colaboradores</h2><p>{% if closure %}Consulta da jornada congelada em {{ month }}.{% else %}Depois de configurada, a jornada de {{ month }} fica independente da jornada padrão.{% endif %}</p></div></div>
   <div class="table-wrap">
     <table>
       <thead><tr><th>Colaborador</th><th>Jornada padrão</th><th>Competência {{ month }}</th><th></th></tr></thead>
@@ -44,13 +63,29 @@
         <td><strong>{{ employee.name }}</strong><small>{{ employee.external_id or 'sem identificador AFD' }}</small></td>
         <td>{% if employee.has_default_schedule %}<span class="badge ok">Disponível</span>{% else %}<span class="badge warn">Não cadastrada</span>{% endif %}</td>
         <td>{% if employee.has_month_schedule %}<span class="badge ok">Configurada</span>{% else %}<span class="badge warn">Pendente</span>{% endif %}</td>
-        <td><a class="button ghost" href="/month-schedules/{{ employee.id }}?month={{ month }}">{% if employee.has_month_schedule %}Editar jornada do mês{% else %}Configurar jornada{% endif %}</a></td>
+        <td><a class="button ghost" href="/month-schedules/{{ employee.id }}?month={{ month }}">{% if closure %}Visualizar{% elif employee.has_month_schedule %}Editar jornada do mês{% else %}Configurar jornada{% endif %}</a></td>
       </tr>
       {% else %}
-      <tr><td colspan="4" class="empty">Nenhum colaborador ativo.</td></tr>
+      <tr><td colspan="4" class="empty">Nenhum colaborador nesta competência.</td></tr>
       {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{% if not closure %}
+<div class="card" style="border-color:#e8b4ae;">
+  <div class="section-head">
+    <div>
+      <h2>Finalizar competência</h2>
+      <p>Use somente depois de conferir jornadas, batidas e divergências. Após a finalização, a competência ficará bloqueada para alterações.</p>
+    </div>
+    <form method="post" action="/month-schedules/finalize" onsubmit="return confirm('Finalizar a competência {{ month }}? Depois disso ela ficará somente para leitura e não poderá ser alterada pela interface.');">
+      <input type="hidden" name="month" value="{{ month }}">
+      <button class="button primary" type="submit">Finalizar competência {{ month }}</button>
+    </form>
+  </div>
+  <p class="footnote">O fechamento congela a jornada mensal, as regras de cálculo, os feriados e o conjunto de batidas já importado. Novas importações de AFD não alteram silenciosamente uma competência fechada.</p>
+</div>
+{% endif %}
 {% endblock %}
