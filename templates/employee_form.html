@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{% if employee %}Editar{% else %}Novo{% endif %} colaborador{% endblock %}
 {% block content %}
-<div class="topbar"><div><h1>{% if employee %}{{ employee.name }}{% else %}Novo colaborador{% endif %}</h1><p>Cadastro e carga horária individual.</p></div><a class="button ghost" href="/employees">Voltar</a></div>
+<div class="topbar"><div><h1>{% if employee %}{{ employee.name }}{% else %}Novo colaborador{% endif %}</h1><p>Cadastro e jornada padrão do colaborador.</p></div><a class="button ghost" href="/employees">Voltar</a></div>
 {% if request.query_params.get('saved') %}<div class="notice success">Alterações salvas.</div>{% endif %}
 <form method="post" action="/employees/save" id="employee-form">
 <input type="hidden" name="employee_id" value="{{ employee.id if employee else '' }}">
@@ -13,15 +13,15 @@
 <div class="card">
   <div class="section-head">
     <div>
-      <h2>Jornada semanal</h2>
-      <p>Use o preenchimento rápido para aplicar e salvar a mesma jornada de segunda a sábado. Depois, qualquer dia pode ser alterado individualmente.</p>
+      <h2>Jornada padrão</h2>
+      <p>Esta jornada funciona como modelo para novas competências. A apuração mensal usa a jornada que for confirmada no botão “Configurar jornadas do mês” do Dashboard.</p>
     </div>
   </div>
 
   <div class="notice" style="display:block;">
     <div style="margin-bottom:14px;">
       <strong>Preenchimento rápido — Segunda a sábado</strong>
-      <div class="help" style="margin-top:4px;">Informe a jornada uma única vez. Ao clicar em aplicar, o sistema preenche segunda, terça, quarta, quinta, sexta e sábado e salva o cadastro. Domingo permanece independente.</div>
+      <div class="help" style="margin-top:4px;">Informe a jornada uma única vez. Ao clicar em aplicar, o sistema preenche segunda, terça, quarta, quinta, sexta e sábado e salva o modelo padrão. Domingo permanece independente.</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;align-items:end;">
       <label>Entrada 1<input type="time" id="quick-start1"></label>
@@ -42,7 +42,7 @@
     {% endfor %}
   </div>
 </div>
-<div class="savebar"><button class="button primary" type="submit">Salvar colaborador e jornada</button></div>
+<div class="savebar"><button class="button primary" type="submit">Salvar colaborador e jornada padrão</button></div>
 </form>
 
 <script>
