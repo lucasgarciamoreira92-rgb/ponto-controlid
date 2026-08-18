@@ -3,7 +3,6 @@ from datetime import date, datetime, timedelta, time
 from calendar import monthrange
 
 WEEKDAY_NAMES = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
-DAILY_STANDARD_OVERTIME_LIMIT_MINUTES = 120
 
 
 def hm(minutes: int | float | None) -> str:
@@ -61,6 +60,22 @@ def interval_minutes(pairs):
     return min(gaps) if gaps else None
 
 
+def _daily_overtime_limit(settings: dict) -> int | None:
+    """Retorna o limite diário vigente na competência.
+
+    Competências antigas, fechadas antes desta regra existir, não possuem a chave
+    no snapshot. Nelas retorna None para preservar o cálculo legado congelado.
+    """
+    raw = settings.get("overtime_daily_limit_minutes")
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return max(0, value)
+
+
 def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, holidays: set[str]):
     pairs, incomplete = pair_punches(punches)
     worked = worked_minutes(pairs)
@@ -71,6 +86,7 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     expected = int(schedule["expected_minutes"]) if schedule and is_workday else 0
     holiday = settings.get("consider_holidays", "1") == "1" and day.isoformat() in holidays
     tolerance = int(settings.get("daily_tolerance_minutes", 0) or 0)
+    daily_limit = _daily_overtime_limit(settings)
 
     # Sem jornada configurada, preserva as batidas e o total trabalhado para conferência,
     # mas não transforma esse tempo em horas extras/faltas/banco automaticamente.
@@ -83,8 +99,8 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
 
     overtime_weekday = 0
     overtime_saturday = 0
-    # Bucket de HE 100%: inclui domingo/feriado e também todo excedente diário
-    # acima das primeiras 2 horas extras.
+    # Bucket de HE 100%: inclui domingo/feriado e, nas competências que possuem
+    # a regra vigente, também o excedente acima do limite diário (120 min).
     overtime_sunday_holiday = 0
     overtime_excess_100 = 0
     shortage = 0
@@ -94,25 +110,33 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
 
     if not review_required:
         if delta > 0:
-            standard_part = min(delta, DAILY_STANDARD_OVERTIME_LIMIT_MINUTES)
-            overtime_excess_100 = max(
-                0, delta - DAILY_STANDARD_OVERTIME_LIMIT_MINUTES
-            )
-
-            if settings.get("bank_hours_enabled") == "1":
-                # Preserva o comportamento do banco de horas até o limite diário.
-                # O excedente acima de 2h é sempre HE 100% e não entra no banco.
-                bank = standard_part
-                overtime_sunday_holiday = overtime_excess_100
-            elif holiday or day.weekday() == 6:
-                # Sem banco de horas, domingos e feriados são integralmente HE 100%.
-                overtime_sunday_holiday = delta
-            else:
-                overtime_sunday_holiday = overtime_excess_100
-                if day.weekday() == 5:
-                    overtime_saturday = standard_part
+            # Snapshot antigo sem a nova regra: mantém exatamente a lógica anterior.
+            if daily_limit is None:
+                if settings.get("bank_hours_enabled") == "1":
+                    bank = delta
+                elif holiday or day.weekday() == 6:
+                    overtime_sunday_holiday = delta
+                elif day.weekday() == 5:
+                    overtime_saturday = delta
                 else:
-                    overtime_weekday = standard_part
+                    overtime_weekday = delta
+            else:
+                standard_part = min(delta, daily_limit)
+                overtime_excess_100 = max(0, delta - daily_limit)
+
+                if settings.get("bank_hours_enabled") == "1":
+                    # Até o limite diário permanece no banco; o excedente é sempre HE 100%.
+                    bank = standard_part
+                    overtime_sunday_holiday = overtime_excess_100
+                elif holiday or day.weekday() == 6:
+                    # Sem banco, domingos e feriados são integralmente HE 100%.
+                    overtime_sunday_holiday = delta
+                else:
+                    overtime_sunday_holiday = overtime_excess_100
+                    if day.weekday() == 5:
+                        overtime_saturday = standard_part
+                    else:
+                        overtime_weekday = standard_part
         elif delta < 0:
             if settings.get("bank_hours_enabled") == "1":
                 bank = delta
