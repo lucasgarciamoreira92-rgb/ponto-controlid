@@ -84,7 +84,7 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     overtime_weekday = 0
     overtime_saturday = 0
     # Bucket de HE 100%: inclui domingo/feriado e também todo excedente diário
-    # acima das primeiras 2 horas extras em dias úteis/sábado.
+    # acima das primeiras 2 horas extras.
     overtime_sunday_holiday = 0
     overtime_excess_100 = 0
     shortage = 0
@@ -94,21 +94,22 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
 
     if not review_required:
         if delta > 0:
-            # Domingo e feriado continuam integralmente no bucket de HE 100%.
-            if holiday or day.weekday() == 6:
+            standard_part = min(delta, DAILY_STANDARD_OVERTIME_LIMIT_MINUTES)
+            overtime_excess_100 = max(
+                0, delta - DAILY_STANDARD_OVERTIME_LIMIT_MINUTES
+            )
+
+            if settings.get("bank_hours_enabled") == "1":
+                # Preserva o comportamento do banco de horas até o limite diário.
+                # O excedente acima de 2h é sempre HE 100% e não entra no banco.
+                bank = standard_part
+                overtime_sunday_holiday = overtime_excess_100
+            elif holiday or day.weekday() == 6:
+                # Sem banco de horas, domingos e feriados são integralmente HE 100%.
                 overtime_sunday_holiday = delta
             else:
-                standard_part = min(delta, DAILY_STANDARD_OVERTIME_LIMIT_MINUTES)
-                overtime_excess_100 = max(
-                    0, delta - DAILY_STANDARD_OVERTIME_LIMIT_MINUTES
-                )
                 overtime_sunday_holiday = overtime_excess_100
-
-                if settings.get("bank_hours_enabled") == "1":
-                    # Mesmo com banco de horas habilitado, o excedente acima de 2h
-                    # não é bancado: permanece HE 100%.
-                    bank = standard_part
-                elif day.weekday() == 5:
+                if day.weekday() == 5:
                     overtime_saturday = standard_part
                 else:
                     overtime_weekday = standard_part
