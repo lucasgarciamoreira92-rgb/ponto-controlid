@@ -23,10 +23,12 @@
   .print-meta-box span{display:block;font-size:6.8pt;text-transform:uppercase;letter-spacing:.07em;color:#72776f;font-weight:700;margin-bottom:2px}
   .print-meta-box strong{font-size:10pt;color:#111}
 
-  .print-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:9px;break-inside:avoid;page-break-inside:avoid}
+  .print-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:7px;break-inside:avoid;page-break-inside:avoid}
   .print-summary.four{grid-template-columns:repeat(4,1fr)}
   .print-summary.three{grid-template-columns:repeat(3,1fr)}
+  .print-occurrences{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:9px;break-inside:avoid;page-break-inside:avoid}
   .print-total{border:1px solid #d8ddd5;border-radius:5px;padding:5px 7px}
+  .print-occurrences .print-total{background:#fafbf9}
   .print-total span{display:block;font-size:6.6pt;color:#70756d;text-transform:uppercase;letter-spacing:.045em;font-weight:700;margin-bottom:2px}
   .print-total strong{font-size:10.5pt;color:#111}
 
