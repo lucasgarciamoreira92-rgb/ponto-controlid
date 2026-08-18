@@ -12,6 +12,11 @@ DEFAULT_SETTINGS = {
     "overtime_weekday_percent": "50",
     "overtime_saturday_percent": "50",
     "overtime_sunday_holiday_percent": "100",
+    # Regra fixa vigente para novas competências: até 2h extras/dia na faixa
+    # normal; excedente acima de 120 minutos classificado em HE 100%.
+    # Esses campos entram no snapshot da competência quando ela é finalizada.
+    "overtime_daily_limit_minutes": "120",
+    "overtime_excess_percent": "100",
     "bank_hours_enabled": "0",
     "min_interval_minutes": "60",
     "night_shift_enabled": "0",
