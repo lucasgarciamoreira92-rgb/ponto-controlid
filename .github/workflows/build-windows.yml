@@ -35,11 +35,11 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller==6.21.0
 
-      - name: Smoke test application and backup
+      - name: Smoke test application backup and restore
         shell: pwsh
         run: |
           python -m py_compile app_paths.py db.py backup_restore.py backup_routes.py app_main.py
-          python -c "import app_main; from backup_restore import create_backup_archive, inspect_backup_archive; p=create_backup_archive('CI_Backup'); info=inspect_backup_archive(p); assert info['counts']['employees'] >= 0; print('Smoke test OK:', p)"
+          python -c "import app_main; from backup_restore import create_backup_archive, inspect_backup_archive, restore_backup_archive; p=create_backup_archive('CI_Backup'); info=inspect_backup_archive(p); assert info['counts']['employees'] >= 0; result=restore_backup_archive(p); assert result['restored'] is True; print('Backup/restore smoke test OK:', p)"
 
       - name: Build Atlas Ponto application
         shell: pwsh
