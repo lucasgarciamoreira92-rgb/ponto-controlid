@@ -1,30 +1,25 @@
 from __future__ import annotations
 
 import logging
-import sys
 import threading
 import time
 import webbrowser
-from pathlib import Path
 from urllib import error as urlerror
 from urllib import request as urlrequest
+
+from app_paths import DATA_DIR, prepare_persistent_storage
+
 
 HOST = "127.0.0.1"
 PORT = 8000
 BASE_URL = f"http://{HOST}:{PORT}"
 
 
-def _runtime_root() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
-
-
 def _setup_logging() -> None:
-    log_dir = _runtime_root() / "data"
-    log_dir.mkdir(parents=True, exist_ok=True)
+    prepare_persistent_storage()
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
-        filename=log_dir / "atlas_ponto.log",
+        filename=DATA_DIR / "atlas_ponto.log",
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
@@ -75,7 +70,7 @@ def main() -> None:
 
             ctypes.windll.user32.MessageBoxW(
                 0,
-                "O Atlas Ponto não conseguiu iniciar. Consulte o arquivo data\\atlas_ponto.log.",
+                f"O Atlas Ponto não conseguiu iniciar. Consulte o log em:\n{DATA_DIR / 'atlas_ponto.log'}",
                 "Atlas Ponto",
                 0x10,
             )
