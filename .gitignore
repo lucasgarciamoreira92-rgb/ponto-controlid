@@ -5,6 +5,8 @@ __pycache__/
 .DS_Store
 
 data/*.db
-data/closed_reports/*.pdf
+data/*.log
+data/closed_reports/
+data/backups/
 uploads/*
 !uploads/.gitkeep
