@@ -96,6 +96,19 @@
       });
     }
   });
+
+  /* O PDF individual usa o mesmo gerador oficial do PDF consolidado. */
+  if (window.location.pathname.startsWith('/report/')) {
+    document.querySelectorAll('button[onclick*="window.print"]').forEach(function (button) {
+      button.removeAttribute('onclick');
+      button.addEventListener('click', function () {
+        const monthInput = document.querySelector('.month-form input[type="month"][name="month"]');
+        const month = monthInput ? monthInput.value : '';
+        const url = window.location.pathname.replace(/\/$/, '') + '/pdf?month=' + encodeURIComponent(month);
+        window.open(url, '_blank', 'noopener');
+      });
+    });
+  }
 })();
 </script>
 </body>
