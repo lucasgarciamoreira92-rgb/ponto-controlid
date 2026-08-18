@@ -21,4 +21,4 @@ python -m pip install -r requirements.txt
 
 echo ""
 echo "Aplicativo iniciado em: http://127.0.0.1:8000"
-python app_auto.py
+python app_main.py
