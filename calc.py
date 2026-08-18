@@ -97,10 +97,11 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
         raw_delta = 0
         delta = 0
 
+    # HE normal inclui segunda a sábado. O campo overtime_saturday é mantido apenas
+    # para compatibilidade com competências antigas já fechadas.
     overtime_weekday = 0
     overtime_saturday = 0
-    # Bucket de HE 100%: inclui domingo/feriado e, nas competências que possuem
-    # a regra vigente, também o excedente acima do limite diário (120 min).
+    # Bucket de HE 100%: domingo/feriado e excedente acima do limite diário.
     overtime_sunday_holiday = 0
     overtime_excess_100 = 0
     shortage = 0
@@ -110,7 +111,8 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
 
     if not review_required:
         if delta > 0:
-            # Snapshot antigo sem a nova regra: mantém exatamente a lógica anterior.
+            # Snapshot antigo sem a nova regra: mantém a classificação histórica.
+            # A interface soma eventual HE sábado à HE normal para exibição.
             if daily_limit is None:
                 if settings.get("bank_hours_enabled") == "1":
                     bank = delta
@@ -132,11 +134,9 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
                     # Sem banco, domingos e feriados são integralmente HE 100%.
                     overtime_sunday_holiday = delta
                 else:
+                    # Segunda a sábado pertencem à mesma faixa de HE normal.
+                    overtime_weekday = standard_part
                     overtime_sunday_holiday = overtime_excess_100
-                    if day.weekday() == 5:
-                        overtime_saturday = standard_part
-                    else:
-                        overtime_weekday = standard_part
         elif delta < 0:
             if settings.get("bank_hours_enabled") == "1":
                 bank = delta
