@@ -4,16 +4,16 @@
 <div class="topbar">
   <div>
     <h1>Autopreenchimento pelo AFD</h1>
-    <p>Revise uma sugestão por colaborador. Nada é gravado até a aprovação final.</p>
+    <p>Revise um colaborador por vez. Jornadas já cadastradas são preservadas como ponto de partida.</p>
   </div>
   <a class="button ghost" href="/employees">Voltar aos colaboradores</a>
 </div>
 
 <div class="notice" style="display:block;">
-  <strong>Como a sugestão é calculada</strong>
+  <strong>Proteção das jornadas existentes</strong>
   <div class="help" style="margin-top:5px;">
-    O sistema analisa os últimos {{ lookback_days }} dias disponíveis no AFD e usa somente dias com exatamente 4 batidas completas.
-    Dias incompletos ou atípicos são ignorados. Os horários encontrados são sugestões e precisam da sua aprovação.
+    Se o colaborador já possui jornada cadastrada, o sistema carrega essa jornada na tela e não a substitui pela sugestão do AFD.
+    A análise do AFD continua disponível apenas como comparação ou opção manual. Nada é gravado até a aprovação final.
   </div>
 </div>
 
@@ -27,7 +27,7 @@
   <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
     <div>
       <strong id="wizard-progress">Colaborador 1 de {{ suggestions|length }}</strong>
-      <div class="help">Aprove, ajuste os horários antes de aprovar ou pule o colaborador.</div>
+      <div class="help">Confira a jornada atual ou sugerida, use o preenchimento rápido e ajuste apenas os dias especiais.</div>
     </div>
     <div class="badge" id="wizard-counter">1 / {{ suggestions|length }}</div>
   </div>
@@ -36,6 +36,8 @@
 {% for item in suggestions %}
 {% set e = item.employee %}
 {% set inf = item.inference %}
+{% set initial = item.initial_days %}
+{% set quick = item.quick %}
 <section class="wizard-step" data-index="{{ loop.index0 }}" data-employee-name="{{ e.name }}" data-employee-id="{{ e.id }}" {% if not loop.first %}style="display:none;"{% endif %}>
   <input type="hidden" name="e{{ e.id }}_approved" id="approved-{{ e.id }}" value="0">
   <div class="card">
@@ -44,16 +46,26 @@
         <h2>{{ e.name }}</h2>
         <p>{{ e.external_id or 'Sem identificador AFD' }}</p>
       </div>
-      {% if inf.has_suggestion %}
+      {% if item.has_existing_schedule %}
+      <span class="badge ok">Jornada já cadastrada · protegida</span>
+      {% elif inf.has_suggestion %}
       <span class="badge {% if inf.confidence_label == 'Alta' %}ok{% elif inf.confidence_label == 'Média' %}warn{% endif %}">
-        Confiança {{ inf.confidence_label }} · {{ inf.confidence_score }}%
+        Sugestão AFD · {{ inf.confidence_label }} · {{ inf.confidence_score }}%
       </span>
       {% else %}
       <span class="badge warn">Dados insuficientes</span>
       {% endif %}
     </div>
 
-    {% if inf.has_suggestion %}
+    {% if item.has_existing_schedule %}
+    <div class="notice success" style="display:block;">
+      <strong>Jornada atual carregada.</strong> Os horários abaixo são os que já estão salvos para este colaborador.
+      Eles só serão alterados se você modificar os campos, aprovar este colaborador e depois confirmar o salvamento final.
+      {% if inf.has_suggestion %}
+      <div class="help" style="margin-top:5px;">O AFD também encontrou uma sugestão com confiança {{ inf.confidence_label }} ({{ inf.confidence_score }}%), mas ela não foi aplicada.</div>
+      {% endif %}
+    </div>
+    {% elif inf.has_suggestion %}
     <div class="notice success" style="display:block;">
       Foram usados <strong>{{ inf.valid_days }} dias completos</strong> para esta sugestão.
       {% if inf.ignored_days %} {{ inf.ignored_days }} dia(s) foram ignorados por terem quantidade de batidas diferente de 4.{% endif %}
@@ -70,15 +82,21 @@
     <div class="notice quick-fill-box" data-employee-id="{{ e.id }}" style="display:block;margin-top:16px;">
       <div style="margin-bottom:12px;">
         <strong>Preenchimento rápido da jornada</strong>
-        <div class="help" style="margin-top:4px;">Se a sugestão do AFD não estiver correta, informe a jornada uma única vez e aplique aos dias selecionados. Depois ajuste abaixo apenas os dias diferentes.</div>
+        <div class="help" style="margin-top:4px;">
+          {% if item.has_existing_schedule %}
+          O padrão predominante da jornada já cadastrada foi carregado abaixo. Dias com horário diferente não são selecionados automaticamente, evitando sobrescrever sábado ou outro dia especial.
+          {% else %}
+          Use os horários sugeridos como referência ou informe uma jornada única e aplique aos dias selecionados. Depois ajuste somente os dias diferentes.
+          {% endif %}
+        </div>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;align-items:end;">
-        <label>Entrada 1<input type="time" class="quick-start1"></label>
-        <label>Saída 1<input type="time" class="quick-end1"></label>
-        <label>Entrada 2<input type="time" class="quick-start2"></label>
-        <label>Saída 2<input type="time" class="quick-end2"></label>
-        <label>Carga manual (h)<input type="number" step="0.01" min="0" max="24" class="quick-hours" placeholder="Calculada pelos horários"></label>
+        <label>Entrada 1<input type="time" class="quick-start1" value="{{ quick.start1 }}"></label>
+        <label>Saída 1<input type="time" class="quick-end1" value="{{ quick.end1 }}"></label>
+        <label>Entrada 2<input type="time" class="quick-start2" value="{{ quick.start2 }}"></label>
+        <label>Saída 2<input type="time" class="quick-end2" value="{{ quick.end2 }}"></label>
+        <label>Carga (h)<input type="number" step="0.01" min="0" max="24" class="quick-hours" value="{{ quick.hours }}" placeholder="Calculada pelos horários"></label>
       </div>
 
       <div style="margin-top:14px;">
@@ -86,14 +104,19 @@
         <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;">
           {% for wd,label in weekdays %}
           <label class="check" style="margin:0;">
-            <input type="checkbox" class="quick-day" value="{{ wd }}" {% if wd <= 5 %}checked{% endif %}> {{ label }}
+            <input type="checkbox" class="quick-day" value="{{ wd }}" {% if wd in item.quick_days %}checked{% endif %}> {{ label }}
           </label>
           {% endfor %}
         </div>
       </div>
 
       <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:14px;">
-        <button class="button ghost quick-use-afd" type="button">Restaurar sugestão do AFD</button>
+        {% if item.has_existing_schedule %}
+        <button class="button ghost quick-use-current" type="button">Restaurar jornada atual</button>
+        {% endif %}
+        {% if inf.has_suggestion %}
+        <button class="button ghost quick-use-afd" type="button">{% if item.has_existing_schedule %}Usar sugestão do AFD{% else %}Restaurar sugestão do AFD{% endif %}</button>
+        {% endif %}
         <button class="button primary quick-apply" type="button">Aplicar jornada aos dias selecionados</button>
       </div>
       <div class="help quick-feedback" style="display:none;margin-top:10px;"></div>
@@ -101,22 +124,29 @@
 
     <div style="margin-top:18px;margin-bottom:8px;">
       <strong>Ajuste fino por dia</strong>
-      <div class="help" style="margin-top:4px;">Os campos abaixo permanecem editáveis. Altere somente o dia que tiver jornada diferente.</div>
+      <div class="help" style="margin-top:4px;">Os campos continuam editáveis. Altere somente o dia que realmente tiver jornada diferente.</div>
     </div>
 
     <div class="schedule-scroll">
       <div class="schedule-grid header"><span>Dia</span><span>Trabalha</span><span>Entrada 1</span><span>Saída 1</span><span>Entrada 2</span><span>Saída 2</span><span>Carga (h)</span></div>
       {% for wd,label in weekdays %}
-      {% set d = inf.days.get(wd) %}
+      {% set d = initial.get(wd) %}
+      {% set afd = inf.days.get(wd) %}
+      {% set current = item.saved_days.get(wd) %}
       <div class="schedule-grid">
-        <strong>{{ label }}{% if d and d.sample_count %}<small>{{ d.sample_count }} dia(s) usados · {{ d.confidence_label }}</small>{% endif %}</strong>
+        <strong>
+          {{ label }}
+          {% if item.has_existing_schedule and current %}<small>jornada atual</small>
+          {% elif afd and afd.sample_count %}<small>{{ afd.sample_count }} dia(s) usados · {{ afd.confidence_label }}</small>{% endif %}
+        </strong>
         <label class="switch"><input type="checkbox" name="e{{ e.id }}_d{{wd}}_active" {% if d and d.active %}checked{% endif %}><span></span></label>
-        <input type="time" name="e{{ e.id }}_d{{wd}}_start1" value="{{ d.start1 if d else '' }}" data-afd-value="{{ d.start1 if d else '' }}">
-        <input type="time" name="e{{ e.id }}_d{{wd}}_end1" value="{{ d.end1 if d else '' }}" data-afd-value="{{ d.end1 if d else '' }}">
-        <input type="time" name="e{{ e.id }}_d{{wd}}_start2" value="{{ d.start2 if d else '' }}" data-afd-value="{{ d.start2 if d else '' }}">
-        <input type="time" name="e{{ e.id }}_d{{wd}}_end2" value="{{ d.end2 if d else '' }}" data-afd-value="{{ d.end2 if d else '' }}">
-        <input type="number" step="0.01" min="0" max="24" name="e{{ e.id }}_d{{wd}}_hours" value="{{ '%.2f'|format((d.expected_minutes or 0)/60) if d and d.active else '' }}" data-afd-value="{{ '%.2f'|format((d.expected_minutes or 0)/60) if d and d.active else '' }}">
-        <input type="hidden" class="afd-active-state" data-day="{{ wd }}" value="{% if d and d.active %}1{% else %}0{% endif %}">
+        <input type="time" name="e{{ e.id }}_d{{wd}}_start1" value="{{ d.start1 if d else '' }}" data-afd-value="{{ afd.start1 if afd else '' }}" data-current-value="{{ current.start1 if current else '' }}">
+        <input type="time" name="e{{ e.id }}_d{{wd}}_end1" value="{{ d.end1 if d else '' }}" data-afd-value="{{ afd.end1 if afd else '' }}" data-current-value="{{ current.end1 if current else '' }}">
+        <input type="time" name="e{{ e.id }}_d{{wd}}_start2" value="{{ d.start2 if d else '' }}" data-afd-value="{{ afd.start2 if afd else '' }}" data-current-value="{{ current.start2 if current else '' }}">
+        <input type="time" name="e{{ e.id }}_d{{wd}}_end2" value="{{ d.end2 if d else '' }}" data-afd-value="{{ afd.end2 if afd else '' }}" data-current-value="{{ current.end2 if current else '' }}">
+        <input type="number" step="0.01" min="0" max="24" name="e{{ e.id }}_d{{wd}}_hours" value="{{ '%.2f'|format((d.expected_minutes or 0)/60) if d and d.active else '' }}" data-afd-value="{{ '%.2f'|format((afd.expected_minutes or 0)/60) if afd and afd.active else '' }}" data-current-value="{{ '%.2f'|format((current.expected_minutes or 0)/60) if current and current.active else '' }}">
+        <input type="hidden" class="afd-active-state" data-day="{{ wd }}" value="{% if afd and afd.active %}1{% else %}0{% endif %}">
+        <input type="hidden" class="current-active-state" data-day="{{ wd }}" value="{% if current and current.active %}1{% else %}0{% endif %}">
       </div>
       {% endfor %}
     </div>
@@ -124,7 +154,7 @@
     <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:18px;">
       <button class="button ghost previous-step" type="button" {% if loop.first %}disabled{% endif %}>← Anterior</button>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button class="button ghost skip-step" type="button" data-employee-id="{{ e.id }}">Pular este colaborador</button>
+        <button class="button ghost skip-step" type="button" data-employee-id="{{ e.id }}">Pular / manter sem alteração</button>
         <button class="button primary approve-step" type="button" data-employee-id="{{ e.id }}">Aprovar jornada e próximo →</button>
       </div>
     </div>
@@ -137,21 +167,21 @@
     <div class="section-head">
       <div>
         <h2>Revisão final</h2>
-        <p>Confira as decisões e os horários antes de gravar as jornadas padrão.</p>
+        <p>Confira as decisões e os horários antes de gravar qualquer alteração.</p>
       </div>
       <span class="badge ok" id="approved-count"></span>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Colaborador</th><th>Decisão</th><th>Jornada aprovada</th><th></th></tr></thead>
+        <thead><tr><th>Colaborador</th><th>Decisão</th><th>Jornada</th><th></th></tr></thead>
         <tbody id="review-body"></tbody>
       </table>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:18px;">
-      <button class="button primary" type="submit">Salvar todas as jornadas aprovadas</button>
+      <button class="button primary" type="submit">Salvar somente as jornadas aprovadas</button>
     </div>
   </div>
-  <p class="footnote">Colaboradores pulados não terão a jornada alterada. As jornadas aprovadas ficam como jornada padrão e depois podem ser copiadas para a competência mensal.</p>
+  <p class="footnote">Quem for pulado permanece exatamente como estava. Somente colaboradores aprovados serão gravados.</p>
 </section>
 </form>
 
@@ -188,12 +218,35 @@
     el.style.display = '';
     el.textContent = message;
     el.style.fontWeight = '600';
-    if (success) {
-      setTimeout(function () { el.style.display = 'none'; }, 3500);
-    }
+    if (success) setTimeout(function () { el.style.display = 'none'; }, 3500);
   }
 
-  document.querySelectorAll('.quick-apply').forEach(button => {
+  function restoreSource(button, source) {
+    const box = button.closest('.quick-fill-box');
+    const step = button.closest('.wizard-step');
+    const id = step.dataset.employeeId;
+    for (let day = 0; day <= 6; day++) {
+      const active = step.querySelector('[name="e' + id + '_d' + day + '_active"]');
+      const state = step.querySelector('.' + source + '-active-state[data-day="' + day + '"]');
+      if (active && state) active.checked = state.value === '1';
+      ['start1', 'end1', 'start2', 'end2', 'hours'].forEach(function (field) {
+        const target = step.querySelector('[name="e' + id + '_d' + day + '_' + field + '"]');
+        if (!target) return;
+        target.value = source === 'afd' ? (target.dataset.afdValue || '') : (target.dataset.currentValue || '');
+      });
+    }
+    showFeedback(box, source === 'afd' ? 'Sugestão do AFD carregada para conferência.' : 'Jornada atualmente salva restaurada.', true);
+  }
+
+  document.querySelectorAll('.quick-use-afd').forEach(function (button) {
+    button.addEventListener('click', function () { restoreSource(this, 'afd'); });
+  });
+
+  document.querySelectorAll('.quick-use-current').forEach(function (button) {
+    button.addEventListener('click', function () { restoreSource(this, 'current'); });
+  });
+
+  document.querySelectorAll('.quick-apply').forEach(function (button) {
     button.addEventListener('click', function () {
       const box = this.closest('.quick-fill-box');
       const step = this.closest('.wizard-step');
@@ -203,66 +256,31 @@
       const start2 = box.querySelector('.quick-start2').value;
       const end2 = box.querySelector('.quick-end2').value;
       let hours = box.querySelector('.quick-hours').value;
+      const selectedDays = Array.from(box.querySelectorAll('.quick-day:checked')).map(function (input) { return Number(input.value); });
 
-      const selectedDays = Array.from(box.querySelectorAll('.quick-day:checked')).map(input => Number(input.value));
-      if (!selectedDays.length) {
-        showFeedback(box, 'Selecione pelo menos um dia da semana.', false);
-        return;
-      }
-      if ((!start1 || !end1) && !hours) {
-        showFeedback(box, 'Informe Entrada 1 e Saída 1 ou uma carga manual.', false);
-        return;
-      }
-      if ((start1 && !end1) || (!start1 && end1)) {
-        showFeedback(box, 'Preencha Entrada 1 e Saída 1 juntas.', false);
-        return;
-      }
-      if ((start2 && !end2) || (!start2 && end2)) {
-        showFeedback(box, 'Preencha Entrada 2 e Saída 2 juntas.', false);
-        return;
-      }
+      if (!selectedDays.length) return showFeedback(box, 'Selecione pelo menos um dia da semana.', false);
+      if ((!start1 || !end1) && !hours) return showFeedback(box, 'Informe Entrada 1 e Saída 1 ou uma carga manual.', false);
+      if ((start1 && !end1) || (!start1 && end1)) return showFeedback(box, 'Preencha Entrada 1 e Saída 1 juntas.', false);
+      if ((start2 && !end2) || (!start2 && end2)) return showFeedback(box, 'Preencha Entrada 2 e Saída 2 juntas.', false);
       if (!hours) hours = calculatedHours(start1, end1, start2, end2);
 
-      selectedDays.forEach(day => {
+      selectedDays.forEach(function (day) {
         const active = step.querySelector('[name="e' + id + '_d' + day + '_active"]');
-        const targetStart1 = step.querySelector('[name="e' + id + '_d' + day + '_start1"]');
-        const targetEnd1 = step.querySelector('[name="e' + id + '_d' + day + '_end1"]');
-        const targetStart2 = step.querySelector('[name="e' + id + '_d' + day + '_start2"]');
-        const targetEnd2 = step.querySelector('[name="e' + id + '_d' + day + '_end2"]');
-        const targetHours = step.querySelector('[name="e' + id + '_d' + day + '_hours"]');
         if (active) active.checked = true;
-        if (targetStart1) targetStart1.value = start1;
-        if (targetEnd1) targetEnd1.value = end1;
-        if (targetStart2) targetStart2.value = start2;
-        if (targetEnd2) targetEnd2.value = end2;
-        if (targetHours) targetHours.value = hours;
+        const values = {start1: start1, end1: end1, start2: start2, end2: end2, hours: hours};
+        Object.keys(values).forEach(function (field) {
+          const target = step.querySelector('[name="e' + id + '_d' + day + '_' + field + '"]');
+          if (target) target.value = values[field];
+        });
       });
 
-      showFeedback(box, 'Jornada aplicada aos ' + selectedDays.length + ' dia(s) selecionado(s). Faça abaixo qualquer ajuste fino necessário.', true);
-    });
-  });
-
-  document.querySelectorAll('.quick-use-afd').forEach(button => {
-    button.addEventListener('click', function () {
-      const box = this.closest('.quick-fill-box');
-      const step = this.closest('.wizard-step');
-      const id = step.dataset.employeeId;
-      for (let day = 0; day <= 6; day++) {
-        const active = step.querySelector('[name="e' + id + '_d' + day + '_active"]');
-        const storedActive = step.querySelector('.afd-active-state[data-day="' + day + '"]');
-        if (active && storedActive) active.checked = storedActive.value === '1';
-        ['start1', 'end1', 'start2', 'end2', 'hours'].forEach(field => {
-          const target = step.querySelector('[name="e' + id + '_d' + day + '_' + field + '"]');
-          if (target) target.value = target.dataset.afdValue || '';
-        });
-      }
-      showFeedback(box, 'Sugestão original do AFD restaurada para este colaborador.', true);
+      showFeedback(box, 'Jornada aplicada somente aos ' + selectedDays.length + ' dia(s) selecionado(s). Os demais dias foram preservados.', true);
     });
   });
 
   function showStep(index) {
     finalReview.style.display = 'none';
-    steps.forEach((step, i) => step.style.display = i === index ? '' : 'none');
+    steps.forEach(function (step, i) { step.style.display = i === index ? '' : 'none'; });
     current = index;
     progress.textContent = 'Colaborador ' + (index + 1) + ' de ' + steps.length;
     counter.textContent = (index + 1) + ' / ' + steps.length;
@@ -290,44 +308,29 @@
   }
 
   function buildReview() {
-    steps.forEach(step => step.style.display = 'none');
+    steps.forEach(function (step) { step.style.display = 'none'; });
     finalReview.style.display = '';
     progress.textContent = 'Revisão final';
     counter.textContent = steps.length + ' revisados';
     reviewBody.innerHTML = '';
     let approved = 0;
-    steps.forEach((step, index) => {
+
+    steps.forEach(function (step, index) {
       const hidden = step.querySelector('input[id^="approved-"]');
       const ok = hidden && hidden.value === '1';
       if (ok) approved += 1;
-
       const tr = document.createElement('tr');
-      const name = document.createElement('td');
-      name.innerHTML = '<strong>' + step.dataset.employeeName + '</strong>';
-
-      const decision = document.createElement('td');
-      decision.innerHTML = ok ? '<span class="badge ok">Aprovada</span>' : '<span class="badge">Sem alteração</span>';
-
-      const summary = document.createElement('td');
-      summary.innerHTML = ok ? '<small>' + scheduleSummary(step) + '</small>' : '—';
-
-      const action = document.createElement('td');
-      action.innerHTML = '<button class="link-button review-employee" type="button" data-index="' + index + '">Revisar</button>';
-
-      tr.appendChild(name);
-      tr.appendChild(decision);
-      tr.appendChild(summary);
-      tr.appendChild(action);
+      tr.innerHTML = '<td><strong>' + step.dataset.employeeName + '</strong></td>' +
+        '<td>' + (ok ? '<span class="badge ok">Salvar</span>' : '<span class="badge">Manter sem alteração</span>') + '</td>' +
+        '<td>' + (ok ? '<small>' + scheduleSummary(step) + '</small>' : '—') + '</td>' +
+        '<td><button class="link-button review-employee" type="button" data-index="' + index + '">Revisar</button></td>';
       reviewBody.appendChild(tr);
     });
+
     approvedCount.textContent = approved + ' jornada(s) para salvar';
-
-    document.querySelectorAll('.review-employee').forEach(button => {
-      button.addEventListener('click', function () {
-        showStep(Number(this.dataset.index));
-      });
+    document.querySelectorAll('.review-employee').forEach(function (button) {
+      button.addEventListener('click', function () { showStep(Number(this.dataset.index)); });
     });
-
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
@@ -336,26 +339,22 @@
     else buildReview();
   }
 
-  document.querySelectorAll('.approve-step').forEach(button => {
+  document.querySelectorAll('.approve-step').forEach(function (button) {
     button.addEventListener('click', function () {
-      const id = this.dataset.employeeId;
-      document.getElementById('approved-' + id).value = '1';
+      document.getElementById('approved-' + this.dataset.employeeId).value = '1';
       nextOrReview();
     });
   });
 
-  document.querySelectorAll('.skip-step').forEach(button => {
+  document.querySelectorAll('.skip-step').forEach(function (button) {
     button.addEventListener('click', function () {
-      const id = this.dataset.employeeId;
-      document.getElementById('approved-' + id).value = '0';
+      document.getElementById('approved-' + this.dataset.employeeId).value = '0';
       nextOrReview();
     });
   });
 
-  document.querySelectorAll('.previous-step').forEach(button => {
-    button.addEventListener('click', function () {
-      if (current > 0) showStep(current - 1);
-    });
+  document.querySelectorAll('.previous-step').forEach(function (button) {
+    button.addEventListener('click', function () { if (current > 0) showStep(current - 1); });
   });
 })();
 </script>
