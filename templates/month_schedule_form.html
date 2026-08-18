@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Jornada {{ month }} | {{ employee.name }}{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <h1>{{ employee.name }}</h1>
+    <p>Jornada usada exclusivamente na competência {{ month }}.</p>
+  </div>
+  <a class="button ghost" href="/month-schedules?month={{ month }}">Voltar</a>
+</div>
+
+{% if request.query_params.get('saved') %}<div class="notice success">Jornada da competência {{ month }} salva.</div>{% endif %}
+{% if source == 'default' %}
+<div class="notice">Os campos abaixo foram pré-preenchidos com a jornada padrão do colaborador. Salve para fixar essa jornada em {{ month }}.</div>
+{% elif source == 'empty' %}
+<div class="notice">Este colaborador ainda não possui jornada padrão. Defina a jornada diretamente para {{ month }}.</div>
+{% endif %}
+
+<form method="post" action="/month-schedules/{{ employee.id }}/save" id="month-schedule-form">
+<input type="hidden" name="month" value="{{ month }}">
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>Jornada da competência {{ month }}</h2>
+      <p>Depois de salva, esta jornada fica congelada para o mês e não muda se a jornada padrão for alterada no futuro.</p>
+    </div>
+  </div>
+
+  <div class="notice" style="display:block;">
+    <div style="margin-bottom:14px;">
+      <strong>Preenchimento rápido — Segunda a sábado</strong>
+      <div class="help" style="margin-top:4px;">Informe a jornada uma única vez e aplique para segunda, terça, quarta, quinta, sexta e sábado. Depois você pode editar qualquer dia individualmente.</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;align-items:end;">
+      <label>Entrada 1<input type="time" id="quick-start1"></label>
+      <label>Saída 1<input type="time" id="quick-end1"></label>
+      <label>Entrada 2<input type="time" id="quick-start2"></label>
+      <label>Saída 2<input type="time" id="quick-end2"></label>
+      <label>Carga manual (h)<input type="number" step="0.01" min="0" max="24" id="quick-hours" placeholder="Opcional"></label>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px;">
+      <button class="button primary" type="button" id="apply-month-weekdays">Aplicar e salvar segunda–sábado</button>
+    </div>
+  </div>
+
+  <div class="schedule-scroll">
+    <div class="schedule-grid header"><span>Dia</span><span>Trabalha</span><span>Entrada 1</span><span>Saída 1</span><span>Entrada 2</span><span>Saída 2</span><span>Carga manual (h)</span></div>
+    {% for wd,label in weekdays %}{% set s=schedules.get(wd) %}
+    <div class="schedule-grid">
+      <strong>{{ label }}</strong>
+      <label class="switch"><input type="checkbox" name="d{{wd}}_active" {% if s and s.is_workday %}checked{% endif %}><span></span></label>
+      <input type="time" name="d{{wd}}_start1" value="{{ s.start1 if s and s.start1 else '' }}">
+      <input type="time" name="d{{wd}}_end1" value="{{ s.end1 if s and s.end1 else '' }}">
+      <input type="time" name="d{{wd}}_start2" value="{{ s.start2 if s and s.start2 else '' }}">
+      <input type="time" name="d{{wd}}_end2" value="{{ s.end2 if s and s.end2 else '' }}">
+      <input type="number" step="0.01" min="0" max="24" name="d{{wd}}_hours" value="{{ '%.2f'|format((s.expected_minutes or 0)/60) if s else '' }}">
+    </div>
+    {% endfor %}
+  </div>
+</div>
+<div class="savebar"><button class="button primary" type="submit">Salvar jornada de {{ month }}</button></div>
+</form>
+
+<script>
+(function () {
+  const button = document.getElementById('apply-month-weekdays');
+  const form = document.getElementById('month-schedule-form');
+  if (!button || !form) return;
+
+  button.addEventListener('click', function () {
+    const values = {
+      start1: document.getElementById('quick-start1').value,
+      end1: document.getElementById('quick-end1').value,
+      start2: document.getElementById('quick-start2').value,
+      end2: document.getElementById('quick-end2').value,
+      hours: document.getElementById('quick-hours').value
+    };
+
+    const hasTimes = values.start1 && values.end1;
+    const hasManualHours = values.hours !== '';
+    if (!hasTimes && !hasManualHours) {
+      alert('Informe pelo menos Entrada 1 e Saída 1 ou uma carga manual.');
+      return;
+    }
+    if ((values.start2 && !values.end2) || (!values.start2 && values.end2)) {
+      alert('Preencha Entrada 2 e Saída 2 juntas.');
+      return;
+    }
+
+    for (let day = 0; day <= 5; day++) {
+      const active = document.querySelector('[name="d' + day + '_active"]');
+      if (active) active.checked = true;
+      ['start1', 'end1', 'start2', 'end2', 'hours'].forEach(function (field) {
+        const target = document.querySelector('[name="d' + day + '_' + field + '"]');
+        if (target) target.value = values[field];
+      });
+    }
+
+    button.disabled = true;
+    button.textContent = 'Salvando jornada…';
+    form.requestSubmit();
+  });
+})();
+</script>
+{% endblock %}
