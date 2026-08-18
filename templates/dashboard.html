@@ -6,6 +6,15 @@
   <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Atualizar</button></form>
 </div>
 
+{% if closure %}
+<div class="notice success" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+  <div>
+    <strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong>
+    <div class="help" style="margin-top:4px;">Fechada em {{ closure.finalized_at }}. Os cálculos usam as regras e batidas congeladas no fechamento.</div>
+  </div>
+  <a class="button ghost" href="/month-schedules?month={{ month }}">Ver jornadas congeladas</a>
+</div>
+{% else %}
 <div class="notice {% if configured_count == employee_count and employee_count > 0 %}success{% endif %}" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
   <div>
     <strong>Jornada da competência {{ month }}</strong>
@@ -16,6 +25,7 @@
   </div>
   <a class="button primary" href="/month-schedules?month={{ month }}">Configurar jornadas do mês</a>
 </div>
+{% endif %}
 
 <div class="cards">
   <div class="card metric"><span>Horas trabalhadas</span><strong>{{ totals.worked|hm }}</strong></div>
