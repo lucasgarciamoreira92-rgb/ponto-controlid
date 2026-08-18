@@ -61,11 +61,6 @@ def interval_minutes(pairs):
 
 
 def _daily_overtime_limit(settings: dict) -> int | None:
-    """Retorna o limite diário vigente na competência.
-
-    Competências antigas, fechadas antes desta regra existir, não possuem a chave
-    no snapshot. Nelas retorna None para preservar o cálculo legado congelado.
-    """
     raw = settings.get("overtime_daily_limit_minutes")
     if raw is None or str(raw).strip() == "":
         return None
@@ -77,11 +72,6 @@ def _daily_overtime_limit(settings: dict) -> int | None:
 
 
 def _saturday_standard_minutes(settings: dict) -> int | None:
-    """Retorna a jornada normal de sábado vigente na competência.
-
-    A ausência da chave identifica snapshots antigos e preserva o previsto que
-    estava salvo na jornada mensal daquele fechamento.
-    """
     raw = settings.get("saturday_standard_minutes")
     if raw is None or str(raw).strip() == "":
         return None
@@ -93,12 +83,7 @@ def _saturday_standard_minutes(settings: dict) -> int | None:
 
 
 def _expected_punch_count(day: date, schedule, is_workday: bool, saturday_standard: int | None) -> int:
-    """Quantidade mínima de marcações esperada para identificar esquecimento.
-
-    Sábado com jornada empresarial de 4h é tratado como um único período
-    (entrada + saída). Nos demais dias, a quantidade é inferida pelos períodos
-    efetivamente configurados na jornada.
-    """
+    """Quantidade mínima de marcações esperada para identificar esquecimento."""
     if not is_workday or schedule is None:
         return 0
     if day.weekday() == 5 and saturday_standard is not None:
@@ -120,9 +105,6 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     schedule_configured = schedule is not None
     saturday_standard = _saturday_standard_minutes(settings)
 
-    # Nas competências com a regra empresarial de sábado, a jornada normal de
-    # sábado é definida pela configuração global (atualmente 240 min = 4h),
-    # independentemente da carga que tenha sido sugerida pelo AFD.
     if day.weekday() == 5 and saturday_standard is not None and schedule_configured:
         is_workday = True
         expected = saturday_standard
@@ -130,8 +112,13 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
         is_workday = bool(schedule and int(schedule["is_workday"]))
         expected = int(schedule["expected_minutes"]) if schedule and is_workday else 0
 
+    holiday = settings.get("consider_holidays", "1") == "1" and day.isoformat() in holidays
     expected_punches = _expected_punch_count(day, schedule, is_workday, saturday_standard)
-    absence = bool(is_workday and not punches)
+
+    # Falta só existe em dia efetivamente previsto de trabalho. Feriado sem
+    # marcação não é contado como falta; se houver trabalho no feriado, ele é
+    # tratado pelas regras de HE 100%.
+    absence = bool(is_workday and not holiday and not punches)
     missing_required_punches = bool(
         punches
         and expected_punches > 0
@@ -143,12 +130,9 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     )
     incomplete = forgotten_punch
 
-    holiday = settings.get("consider_holidays", "1") == "1" and day.isoformat() in holidays
     tolerance = int(settings.get("daily_tolerance_minutes", 0) or 0)
     daily_limit = _daily_overtime_limit(settings)
 
-    # Sem jornada configurada, preserva as batidas e o total trabalhado para conferência,
-    # mas não transforma esse tempo em horas extras/faltas/banco automaticamente.
     if schedule_configured:
         raw_delta = worked - expected if is_workday else worked
         delta = 0 if abs(raw_delta) <= tolerance else raw_delta
@@ -156,11 +140,8 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
         raw_delta = 0
         delta = 0
 
-    # HE normal inclui segunda a sábado. O campo overtime_saturday é mantido apenas
-    # para compatibilidade com competências antigas já fechadas.
     overtime_weekday = 0
     overtime_saturday = 0
-    # Bucket de HE 100%: domingo/feriado e excedente acima do limite diário.
     overtime_sunday_holiday = 0
     overtime_excess_100 = 0
     shortage = 0
@@ -169,8 +150,6 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
 
     if not review_required:
         if delta > 0:
-            # Snapshot antigo sem a nova regra: mantém a classificação histórica.
-            # A interface soma eventual HE sábado à HE normal para exibição.
             if daily_limit is None:
                 if settings.get("bank_hours_enabled") == "1":
                     bank = delta
@@ -185,14 +164,11 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
                 overtime_excess_100 = max(0, delta - daily_limit)
 
                 if settings.get("bank_hours_enabled") == "1":
-                    # Até o limite diário permanece no banco; o excedente é sempre HE 100%.
                     bank = standard_part
                     overtime_sunday_holiday = overtime_excess_100
                 elif holiday or day.weekday() == 6:
-                    # Sem banco, domingos e feriados são integralmente HE 100%.
                     overtime_sunday_holiday = delta
                 else:
-                    # Segunda a sábado pertencem à mesma faixa de HE normal.
                     overtime_weekday = standard_part
                     overtime_sunday_holiday = overtime_excess_100
         elif delta < 0:
