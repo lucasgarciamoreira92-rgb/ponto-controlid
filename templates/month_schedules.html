@@ -14,9 +14,15 @@
 </div>
 
 {% if closure %}
-<div class="notice success">
-  <strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong>
-  <div class="help" style="margin-top:4px;">Fechada em {{ closure.finalized_at }}. Jornadas, regras, feriados e o conjunto de batidas considerado nesta competência estão congelados.</div>
+<div class="notice success" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+  <div>
+    <strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong>
+    <div class="help" style="margin-top:4px;">Fechada em {{ closure.finalized_at }}. Jornadas, regras, feriados e o conjunto de batidas considerado nesta competência estão congelados.</div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <a class="button primary" href="/closures/{{ month }}/pdf">Baixar PDF completo</a>
+    <a class="button ghost" href="/closures">Competências fechadas</a>
+  </div>
 </div>
 {% elif request.query_params.get('finalized') %}
 <div class="notice success"><strong>Competência {{ month }} finalizada com sucesso.</strong></div>
