@@ -8,7 +8,14 @@ DB_PATH = BASE_DIR / "data" / "ponto.db"
 
 DEFAULT_SETTINGS = {
     "company_name": "Controle de Ponto",
+    # Mantida somente para preservar o cálculo de competências antigas que já
+    # foram finalizadas com a lógica legada de tolerância sobre o saldo diário.
     "daily_tolerance_minutes": "10",
+    # Regra vigente para competências abertas e futuras: art. 58, §1º, CLT.
+    # A tolerância é aplicada às marcações do ponto, não ao saldo final do dia.
+    "tolerance_rule_version": "clt_marking_v1",
+    "marking_tolerance_minutes": "5",
+    "daily_marking_tolerance_minutes": "10",
     "overtime_weekday_percent": "50",
     "overtime_saturday_percent": "50",
     "overtime_sunday_holiday_percent": "100",
