@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Equipamentos | Atlas Ponto{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <div class="eyebrow"><span class="eyebrow-dot"></span> INTEGRAÇÃO DIRETA</div>
+    <h1>Relógios de ponto</h1>
+    <p>Conecte o REP Control iD e traga o AFD para o Atlas sem baixar arquivos manualmente.</p>
+  </div>
+</div>
+
+{% if request.query_params.get('saved') %}
+<div class="notice success"><strong>Equipamento salvo.</strong> Agora use “Testar conexão” antes da primeira sincronização.</div>
+{% endif %}
+{% if request.query_params.get('test_ok') %}
+<div class="notice success"><strong>{{ request.query_params.get('test_ok') }}</strong></div>
+{% endif %}
+{% if request.query_params.get('sync_ok') %}
+<div class="notice success"><strong>Sincronização concluída.</strong> {{ request.query_params.get('new','0') }} batida(s) nova(s) importada(s).{% if request.query_params.get('nsr') %} Último NSR: {{ request.query_params.get('nsr') }}.{% endif %}</div>
+{% endif %}
+{% if request.query_params.get('error') %}
+<div class="notice"><strong>Não foi possível concluir:</strong> {{ request.query_params.get('error') }}</div>
+{% endif %}
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow compact"><span class="eyebrow-dot"></span> CONFIGURAÇÃO</div>
+      <h2>{% if edit_device %}Editar {{ edit_device.name }}{% else %}Adicionar REP Control iD{% endif %}</h2>
+      <p>O relógio deve estar acessível pela mesma rede do computador que executa o Atlas, ou por uma VPN segura.</p>
+    </div>
+    {% if edit_device %}<a class="button ghost" href="/devices">Novo equipamento</a>{% endif %}
+  </div>
+
+  <form method="post" action="/devices/save" class="form-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;">
+    <input type="hidden" name="device_id" value="{{ edit_device.id if edit_device else '' }}">
+    <label style="grid-column:span 2;">Nome do equipamento
+      <input name="name" required value="{{ edit_device.name if edit_device else 'REP Recepção' }}" placeholder="REP Recepção">
+    </label>
+    <label>IP / hostname
+      <input name="host" required value="{{ edit_device.host if edit_device else '' }}" placeholder="192.168.1.150">
+    </label>
+    <label>Porta HTTPS
+      <input name="port" type="number" min="1" max="65535" value="{{ edit_device.port if edit_device else 443 }}">
+    </label>
+    <label>Usuário
+      <input name="login" required value="{{ edit_device.login if edit_device else 'admin' }}" autocomplete="username">
+    </label>
+    <label>Senha
+      <input name="password" type="password" value="" autocomplete="current-password" placeholder="{% if edit_device %}deixe vazio para manter{% else %}senha do REP{% endif %}">
+    </label>
+    <label>Sincronização automática
+      <select name="auto_sync_minutes">
+        {% set current_interval = edit_device.auto_sync_minutes if edit_device else 0 %}
+        <option value="0" {% if current_interval == 0 %}selected{% endif %}>Desativada</option>
+        <option value="5" {% if current_interval == 5 %}selected{% endif %}>A cada 5 minutos</option>
+        <option value="15" {% if current_interval == 15 %}selected{% endif %}>A cada 15 minutos</option>
+        <option value="30" {% if current_interval == 30 %}selected{% endif %}>A cada 30 minutos</option>
+        <option value="60" {% if current_interval == 60 %}selected{% endif %}>A cada 1 hora</option>
+      </select>
+    </label>
+    <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding-top:22px;">
+      <label class="check"><input type="checkbox" name="enabled" {% if not edit_device or edit_device.enabled %}checked{% endif %}> Ativo</label>
+      <label class="check"><input type="checkbox" name="verify_tls" {% if edit_device and edit_device.verify_tls %}checked{% endif %}> Validar certificado HTTPS</label>
+    </div>
+    <div style="grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      <button class="button primary" type="submit">Salvar equipamento</button>
+      <span class="help">A API do REP usa HTTPS. Em rede local, certificados próprios do equipamento podem exigir a validação desativada.</span>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow compact"><span class="eyebrow-dot"></span> EQUIPAMENTOS</div>
+      <h2>Sincronização</h2>
+      <p>Na primeira execução o Atlas pode percorrer um bloco maior do AFD. Depois, busca somente a partir do próximo NSR.</p>
+    </div>
+    {% if devices %}
+    <form method="post" action="/devices/sync-all"><button class="button primary" type="submit">Sincronizar todos agora</button></form>
+    {% endif %}
+  </div>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>Equipamento</th><th>Status</th><th>Última sincronização</th><th>Último NSR</th><th>Automático</th><th></th></tr></thead>
+    <tbody>
+    {% for device in devices %}
+      <tr>
+        <td><strong>{{ device.name }}</strong><small>{{ device.host }}:{{ device.port }}{% if device.device_model %} · {{ device.device_model }}{% endif %}</small></td>
+        <td>
+          {% if device.last_status in ('ok','online') %}<span class="badge ok">Online</span>
+          {% elif device.last_status == 'error' %}<span class="badge warn">Erro</span>
+          {% else %}<span class="badge">Não testado</span>{% endif %}
+          {% if device.last_error %}<small title="{{ device.last_error }}">{{ device.last_error }}</small>{% endif %}
+        </td>
+        <td>{% if device.last_success_at %}<strong>{{ device.last_success_at }}</strong><small>{{ device.last_new_punches }} batida(s) nova(s) na última sincronização</small>{% else %}—{% endif %}</td>
+        <td><strong>{{ device.last_nsr or 0 }}</strong></td>
+        <td>{% if device.auto_sync_minutes %}A cada {{ device.auto_sync_minutes }} min{% else %}Desativada{% endif %}</td>
+        <td>
+          <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+            <form method="post" action="/devices/{{ device.id }}/test"><button class="button ghost" type="submit">Testar conexão</button></form>
+            <form method="post" action="/devices/{{ device.id }}/sync"><button class="button primary" type="submit">Sincronizar agora</button></form>
+            <a class="button ghost" href="/devices?edit={{ device.id }}">Editar</a>
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="empty">Nenhum relógio configurado. Cadastre o primeiro equipamento acima.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="card">
+  <div class="section-head"><div><h2>Histórico de sincronizações</h2><p>Registro operacional das últimas tentativas de comunicação com os relógios.</p></div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Início</th><th>Equipamento</th><th>NSR solicitado</th><th>NSR recebido</th><th>Novas batidas</th><th>Status</th><th>Mensagem</th></tr></thead>
+    <tbody>
+    {% for sync in syncs %}
+      <tr>
+        <td>{{ sync.started_at }}</td>
+        <td><strong>{{ sync.device_name }}</strong></td>
+        <td>{{ sync.requested_initial_nsr or 'integral' }}</td>
+        <td>{{ sync.returned_max_nsr or '—' }}</td>
+        <td>{{ sync.inserted_punches }}</td>
+        <td>{% if sync.status == 'ok' %}<span class="badge ok">OK</span>{% elif sync.status == 'running' %}<span class="badge">Em andamento</span>{% else %}<span class="badge warn">Erro</span>{% endif %}</td>
+        <td>{{ sync.message or '—' }}</td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="empty">Nenhuma sincronização realizada ainda.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="notice" style="display:block;">
+  <strong>Segurança de rede</strong>
+  <div class="help" style="margin-top:5px;">Não exponha a porta HTTPS do relógio diretamente à internet. Para acessar um REP fora da rede local, prefira VPN, agente local ou a solução de nuvem do fabricante.</div>
+</div>
+{% endblock %}
