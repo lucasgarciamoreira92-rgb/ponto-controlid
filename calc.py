@@ -146,6 +146,25 @@ def _scheduled_marking_datetimes(day: date, schedule, expected_minutes: int) -> 
     return result
 
 
+def _match_timezone(actual: datetime, planned: datetime) -> datetime:
+    """Alinha o horário contratual ao tipo de timezone da marcação real.
+
+    O AFD do Control iD é armazenado com offset (ex.: -03:00), enquanto os
+    horários de jornada são horários civis sem timezone. Para comparar os dois
+    sem alterar o instante registrado no AFD, o horário contratual recebe o
+    mesmo tzinfo da marcação correspondente. Se a marcação for naive, o horário
+    contratual permanece naive.
+    """
+    actual_aware = actual.tzinfo is not None and actual.utcoffset() is not None
+    planned_aware = planned.tzinfo is not None and planned.utcoffset() is not None
+
+    if actual_aware and not planned_aware:
+        return planned.replace(tzinfo=actual.tzinfo)
+    if not actual_aware and planned_aware:
+        return planned.replace(tzinfo=None)
+    return planned
+
+
 def _apply_clt_marking_tolerance(
     day: date,
     punches: list[datetime],
@@ -183,9 +202,13 @@ def _apply_clt_marking_tolerance(
         daily_limit = 10
 
     ordered = sorted(punches)
+    aligned_expected_points = [
+        _match_timezone(actual, planned)
+        for actual, planned in zip(ordered, expected_points)
+    ]
     variations = [
         int((actual - planned).total_seconds() / 60)
-        for actual, planned in zip(ordered, expected_points)
+        for actual, planned in zip(ordered, aligned_expected_points)
     ]
     total_variation = sum(abs(value) for value in variations)
     within_limits = (
@@ -194,7 +217,7 @@ def _apply_clt_marking_tolerance(
     )
 
     if within_limits:
-        return expected_points, any(variations), total_variation, variations
+        return aligned_expected_points, any(variations), total_variation, variations
     return punches, False, total_variation, variations
 
 
