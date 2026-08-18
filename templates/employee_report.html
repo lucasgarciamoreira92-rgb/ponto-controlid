@@ -1,7 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Apuração | {{ employee.name }}{% endblock %}
 {% block content %}
-<div class="topbar"><div><h1>{{ employee.name }}</h1><p>Apuração individual por batidas do AFD.</p></div><form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Atualizar</button></form></div>
+{% set month_names = {'01':'Janeiro','02':'Fevereiro','03':'Março','04':'Abril','05':'Maio','06':'Junho','07':'Julho','08':'Agosto','09':'Setembro','10':'Outubro','11':'Novembro','12':'Dezembro'} %}
+{% set competence_label = month_names.get(month[5:7], month[5:7]) ~ '/' ~ month[:4] %}
+
+<div class="topbar">
+  <div><h1>{{ employee.name }}</h1><p>Apuração individual por batidas do AFD.</p></div>
+  <div class="actions">
+    {% if month_configured %}
+    <button class="button primary" type="button" onclick="window.print()">{% if closure %}PDF para assinatura{% else %}Prévia PDF{% endif %}</button>
+    {% endif %}
+    <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Atualizar</button></form>
+  </div>
+</div>
 
 {% if closure %}
 <div class="notice success"><strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong><div class="help" style="margin-top:4px;">Este relatório usa a jornada, regras, feriados e batidas congelados no fechamento em {{ closure.finalized_at }}.</div></div>
@@ -30,4 +41,87 @@
 {% for d in days %}<tr class="{% if d.review_required %}row-warn{% endif %}"><td><strong>{{ d.date.strftime('%d/%m/%Y') }}</strong><small>{{ d.weekday }}{% if d.holiday %} · feriado{% endif %}{% if d.overtime_excess_100 %} · excedente &gt;2h: {{ d.overtime_excess_100|hm }} a 100%{% endif %}</small></td><td class="punches">{% for p in d.punches %}<span>{{ p.strftime('%H:%M') }}</span>{% else %}—{% endfor %}</td><td>{{ d.worked|hm }}</td><td>{{ d.expected|hm }}</td>{% if settings.bank_hours_enabled == '1' %}<td class="positive">{{ d.bank|hm }}</td><td class="positive">{{ d.overtime_sunday_holiday|hm }}</td>{% else %}<td class="positive">{{ (d.overtime_weekday + d.overtime_saturday)|hm }}</td><td class="positive">{{ d.overtime_sunday_holiday|hm }}</td><td class="negative">{{ d.shortage|hm }}</td>{% endif %}<td>{% if d.status=='OK' %}<span class="badge ok">OK</span>{% else %}<span class="badge warn">{{ d.status }}</span>{% endif %}</td></tr>{% else %}<tr><td colspan="10" class="empty">Sem dados para esta competência.</td></tr>{% endfor %}
 </tbody></table></div></div>
 <p class="footnote">Dias com marcação incompleta, sem marcação ou sem jornada mensal configurada são sinalizados para conferência e não entram automaticamente nos totais de hora extra/débito.</p>
+
+{% if month_configured %}
+<section class="print-report" aria-hidden="true">
+  <header class="print-report-header">
+    <div class="print-company">{{ settings.company_name or 'Empresa' }}</div>
+    <h1 class="print-title">Espelho mensal de ponto</h1>
+    <p class="print-subtitle">Registro individual de jornada</p>
+    {% if not closure %}<div class="print-preview">Prévia - competência em aberto</div>{% endif %}
+  </header>
+
+  <div class="print-meta">
+    <div class="print-meta-box"><span>Colaborador</span><strong>{{ employee.name }}</strong></div>
+    <div class="print-meta-box"><span>Competência</span><strong>{{ competence_label }}</strong></div>
+  </div>
+
+  {% if settings.bank_hours_enabled == '1' %}
+  <div class="print-summary four">
+    <div class="print-total"><span>Total trabalhado</span><strong>{{ totals.worked|hm }}</strong></div>
+    <div class="print-total"><span>Total previsto</span><strong>{{ totals.expected|hm }}</strong></div>
+    <div class="print-total"><span>Saldo banco</span><strong>{{ totals.bank|hm }}</strong></div>
+    <div class="print-total"><span>HE 100%</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
+  </div>
+  {% else %}
+  <div class="print-summary">
+    <div class="print-total"><span>Total trabalhado</span><strong>{{ totals.worked|hm }}</strong></div>
+    <div class="print-total"><span>Total previsto</span><strong>{{ totals.expected|hm }}</strong></div>
+    <div class="print-total"><span>HE {{ settings.overtime_weekday_percent }}%</span><strong>{{ (totals.overtime_weekday + totals.overtime_saturday)|hm }}</strong></div>
+    <div class="print-total"><span>HE 100%</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
+    <div class="print-total"><span>Débitos</span><strong>{{ totals.shortage|hm }}</strong></div>
+  </div>
+  {% endif %}
+
+  <table class="print-table">
+    {% if settings.bank_hours_enabled == '1' %}
+    <colgroup><col style="width:9%"><col style="width:7%"><col style="width:28%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:10%"><col style="width:13%"></colgroup>
+    <thead><tr><th>Data</th><th>Dia</th><th>Marcações</th><th>Trabalhado</th><th>Previsto</th><th>Banco</th><th>HE 100%</th><th>Observação</th></tr></thead>
+    {% else %}
+    <colgroup><col style="width:8%"><col style="width:7%"><col style="width:25%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:15%"></colgroup>
+    <thead><tr><th>Data</th><th>Dia</th><th>Marcações</th><th>Trabalhado</th><th>Previsto</th><th>HE {{ settings.overtime_weekday_percent }}%</th><th>HE 100%</th><th>Débito</th><th>Observação</th></tr></thead>
+    {% endif %}
+    <tbody>
+    {% for d in days %}
+      <tr>
+        <td class="center">{{ d.date.strftime('%d/%m/%Y') }}</td>
+        <td class="center">{{ d.weekday }}</td>
+        <td class="punch-list">{% for p in d.punches %}{{ p.strftime('%H:%M') }}{% if not loop.last %} &nbsp; | &nbsp; {% endif %}{% else %}-{% endfor %}</td>
+        <td class="center">{{ d.worked|hm }}</td>
+        <td class="center">{{ d.expected|hm }}</td>
+        {% if settings.bank_hours_enabled == '1' %}
+        <td class="center">{{ d.bank|hm }}</td>
+        <td class="center">{{ d.overtime_sunday_holiday|hm }}</td>
+        {% else %}
+        <td class="center">{{ (d.overtime_weekday + d.overtime_saturday)|hm }}</td>
+        <td class="center">{{ d.overtime_sunday_holiday|hm }}</td>
+        <td class="center">{{ d.shortage|hm }}</td>
+        {% endif %}
+        <td class="print-note">
+          {% if 'Sem marcação' in d.status %}Sem marcação
+          {% elif 'Marcação incompleta' in d.status %}Marcação incompleta
+          {% elif 'Intervalo' in d.status %}{{ d.status }}
+          {% elif d.holiday %}Feriado
+          {% else %}-{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <p class="print-footer-note">As marcações são apresentadas em ordem cronológica e correspondem aos registros considerados nesta competência.</p>
+
+  {% if closure %}
+  <div class="print-signature">
+    <p class="print-declaration">Declaro que tive acesso e conferi os registros de jornada acima referentes à competência indicada.</p>
+    <div class="print-signature-grid">
+      <div class="signature-line"><strong>{{ employee.name }}</strong>Assinatura do colaborador</div>
+      <div class="signature-line">Data: ____/____/________</div>
+    </div>
+  </div>
+  {% else %}
+  <p class="print-footer-note" style="margin-top:12mm!important;font-weight:700;">Prévia sem campo de assinatura. Finalize a competência para emitir a versão definitiva para assinatura.</p>
+  {% endif %}
+</section>
+{% endif %}
 {% endblock %}
