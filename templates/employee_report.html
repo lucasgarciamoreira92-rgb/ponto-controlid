@@ -69,24 +69,23 @@
   </div>
 
   {% if settings.bank_hours_enabled == '1' %}
-  <div class="print-summary three">
+  <div class="print-summary five">
     <div class="print-total"><span>Total trabalhado</span><strong>{{ totals.worked|hm }}</strong></div>
     <div class="print-total"><span>Saldo banco</span><strong>{{ totals.bank|hm }}</strong></div>
     <div class="print-total"><span>HE 100%</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
+    <div class="print-total"><span>Faltas</span><strong>{{ absence_count }} dia(s)</strong></div>
+    <div class="print-total"><span>Batidas incompletas</span><strong>{{ forgotten_punch_count }} dia(s)</strong></div>
   </div>
   {% else %}
-  <div class="print-summary four">
+  <div class="print-summary six">
     <div class="print-total"><span>Total trabalhado</span><strong>{{ totals.worked|hm }}</strong></div>
     <div class="print-total"><span>HE {{ settings.overtime_weekday_percent }}%</span><strong>{{ (totals.overtime_weekday + totals.overtime_saturday)|hm }}</strong></div>
     <div class="print-total"><span>HE 100%</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
     <div class="print-total"><span>Débitos</span><strong>{{ totals.shortage|hm }}</strong></div>
-  </div>
-  {% endif %}
-
-  <div class="print-occurrences">
     <div class="print-total"><span>Faltas</span><strong>{{ absence_count }} dia(s)</strong></div>
     <div class="print-total"><span>Batidas incompletas</span><strong>{{ forgotten_punch_count }} dia(s)</strong></div>
   </div>
+  {% endif %}
 
   <table class="print-table">
     {% if settings.bank_hours_enabled == '1' %}
@@ -123,7 +122,7 @@
     </tbody>
   </table>
 
-  <p class="print-footer-note">As marcações são apresentadas em ordem cronológica e correspondem aos registros considerados nesta competência.</p>
+  <p class="print-footer-note">Marcações em ordem cronológica, conforme registros considerados na competência.</p>
 
   {% if closure %}
   <div class="print-signature">
@@ -134,7 +133,7 @@
     </div>
   </div>
   {% else %}
-  <p class="print-footer-note" style="margin-top:12mm!important;font-weight:700;">Prévia sem campo de assinatura. Finalize a competência para emitir a versão definitiva para assinatura.</p>
+  <p class="print-footer-note print-preview-note">Prévia sem campo de assinatura. Finalize a competência para emitir a versão definitiva.</p>
   {% endif %}
 </section>
 {% endif %}
