@@ -202,8 +202,30 @@ def dashboard(request: Request, month: Optional[str] = None):
                 (month, month + "-%", int(closure["punch_cutoff_id"] or 0)),
             ).fetchall()
         else:
+            # Uma competência aberta deve mostrar todos que efetivamente fazem
+            # parte daquele mês: ativos hoje, quem possui batidas no período ou
+            # quem já recebeu uma jornada mensal. Isso mantém a tela alinhada
+            # com as mesmas pessoas verificadas no fechamento.
             employees = conn.execute(
-                "SELECT * FROM employees WHERE active=1 ORDER BY name"
+                """
+                SELECT DISTINCT e.*
+                FROM employees e
+                WHERE e.active=1
+                   OR EXISTS(
+                       SELECT 1
+                       FROM punches p
+                       WHERE p.employee_id=e.id
+                         AND p.punched_at LIKE ?
+                   )
+                   OR EXISTS(
+                       SELECT 1
+                       FROM monthly_schedules ms
+                       WHERE ms.employee_id=e.id
+                         AND ms.month=?
+                   )
+                ORDER BY e.name
+                """,
+                (month + "-%", month),
             ).fetchall()
 
         summaries = []
@@ -306,6 +328,9 @@ def month_schedules_page(request: Request, month: Optional[str] = None):
                 ),
             ).fetchall()
         else:
+            # Mesma população usada pelo fechamento: não esconder colaborador
+            # inativo que possua batidas na competência, pois ele ainda precisa
+            # ter a jornada daquele mês conferida/configurada.
             employees = conn.execute(
                 """
                 SELECT e.*,
@@ -319,9 +344,19 @@ def month_schedules_page(request: Request, month: Optional[str] = None):
                        ) AS has_month_schedule
                 FROM employees e
                 WHERE e.active=1
+                   OR EXISTS(
+                       SELECT 1 FROM punches p
+                       WHERE p.employee_id=e.id
+                         AND p.punched_at LIKE ?
+                   )
+                   OR EXISTS(
+                       SELECT 1 FROM monthly_schedules ms
+                       WHERE ms.employee_id=e.id
+                         AND ms.month=?
+                   )
                 ORDER BY e.name
                 """,
-                (month,),
+                (month, month + "-%", month),
             ).fetchall()
 
     return templates.TemplateResponse(
@@ -349,8 +384,26 @@ async def month_schedules_copy_defaults(request: Request):
                 status_code=303,
             )
 
+        # O preenchimento rápido segue a mesma população da competência,
+        # incluindo inativos que possuam batidas no mês selecionado.
         employees = conn.execute(
-            "SELECT id FROM employees WHERE active=1 ORDER BY name"
+            """
+            SELECT DISTINCT e.id
+            FROM employees e
+            WHERE e.active=1
+               OR EXISTS(
+                   SELECT 1 FROM punches p
+                   WHERE p.employee_id=e.id
+                     AND p.punched_at LIKE ?
+               )
+               OR EXISTS(
+                   SELECT 1 FROM monthly_schedules ms
+                   WHERE ms.employee_id=e.id
+                     AND ms.month=?
+               )
+            ORDER BY e.name
+            """,
+            (month + "-%", month),
         ).fetchall()
 
         for employee in employees:
@@ -442,8 +495,13 @@ async def month_schedules_finalize(request: Request):
         ).fetchall()
 
         if missing:
+            missing_ids = ",".join(str(row["id"]) for row in missing)
             return RedirectResponse(
-                f"/month-schedules?month={month}&error=missing&missing={len(missing)}",
+                (
+                    f"/month-schedules?month={month}"
+                    f"&error=missing&missing={len(missing)}"
+                    f"&missing_ids={missing_ids}"
+                ),
                 status_code=303,
             )
 
