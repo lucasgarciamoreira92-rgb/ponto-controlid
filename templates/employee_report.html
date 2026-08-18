@@ -35,9 +35,8 @@
   <div class="help" style="margin-top:4px;">De segunda a sábado, até 2 horas extras por dia permanecem na faixa normal. Todo excedente acima de 2 horas é classificado como HE 100%. Sem banco de horas, domingos e feriados permanecem integralmente em HE 100%.</div>
 </div>
 
-<div class="cards">
+<div class="cards report-metrics {% if settings.bank_hours_enabled == '1' %}report-metrics-bank{% endif %}">
   <div class="card metric"><span>Trabalhado</span><strong>{{ totals.worked|hm }}</strong></div>
-  <div class="card metric"><span>Previsto</span><strong>{{ totals.expected|hm }}</strong></div>
   {% if settings.bank_hours_enabled == '1' %}
   <div class="card metric"><span>Saldo banco · até 2h extras/dia</span><strong>{{ totals.bank|hm }}</strong></div>
   <div class="card metric"><span>HE 100% · excedente &gt; 2h/dia</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
@@ -50,8 +49,8 @@
   <div class="card metric"><span>Batidas incompletas</span><strong>{{ forgotten_punch_count }}</strong><small>dia(s) com marcação esquecida</small></div>
 </div>
 
-<div class="card"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Batidas</th><th>Trabalhado</th><th>Previsto</th>{% if settings.bank_hours_enabled == '1' %}<th>Banco até 2h/dia</th><th>HE 100% &gt; 2h</th>{% else %}<th>HE {{ settings.overtime_weekday_percent }}%</th><th>HE 100%</th><th>Débito</th>{% endif %}<th>Status</th></tr></thead><tbody>
-{% for d in days %}<tr class="{% if d.review_required %}row-warn{% endif %}"><td><strong>{{ d.date.strftime('%d/%m/%Y') }}</strong><small>{{ d.weekday }}{% if d.holiday %} · feriado{% endif %}{% if d.overtime_excess_100 %} · excedente &gt;2h: {{ d.overtime_excess_100|hm }} a 100%{% endif %}</small></td><td class="punches">{% for p in d.punches %}<span>{{ p.strftime('%H:%M') }}</span>{% else %}—{% endfor %}</td><td>{{ d.worked|hm }}</td><td>{{ d.expected|hm }}</td>{% if settings.bank_hours_enabled == '1' %}<td class="positive">{{ d.bank|hm }}</td><td class="positive">{{ d.overtime_sunday_holiday|hm }}</td>{% else %}<td class="positive">{{ (d.overtime_weekday + d.overtime_saturday)|hm }}</td><td class="positive">{{ d.overtime_sunday_holiday|hm }}</td><td class="negative">{{ d.shortage|hm }}</td>{% endif %}<td>{% if d.status=='OK' %}<span class="badge ok">OK</span>{% else %}<span class="badge warn">{{ d.status }}</span>{% endif %}</td></tr>{% else %}<tr><td colspan="10" class="empty">Sem dados para esta competência.</td></tr>{% endfor %}
+<div class="card"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Batidas</th><th>Trabalhado</th>{% if settings.bank_hours_enabled == '1' %}<th>Banco até 2h/dia</th><th>HE 100% &gt; 2h</th>{% else %}<th>HE {{ settings.overtime_weekday_percent }}%</th><th>HE 100%</th><th>Débito</th>{% endif %}<th>Status</th></tr></thead><tbody>
+{% for d in days %}<tr class="{% if d.review_required %}row-warn{% endif %}"><td><strong>{{ d.date.strftime('%d/%m/%Y') }}</strong><small>{{ d.weekday }}{% if d.holiday %} · feriado{% endif %}{% if d.overtime_excess_100 %} · excedente &gt;2h: {{ d.overtime_excess_100|hm }} a 100%{% endif %}</small></td><td class="punches">{% for p in d.punches %}<span>{{ p.strftime('%H:%M') }}</span>{% else %}—{% endfor %}</td><td>{{ d.worked|hm }}</td>{% if settings.bank_hours_enabled == '1' %}<td class="positive">{{ d.bank|hm }}</td><td class="positive">{{ d.overtime_sunday_holiday|hm }}</td>{% else %}<td class="positive">{{ (d.overtime_weekday + d.overtime_saturday)|hm }}</td><td class="positive">{{ d.overtime_sunday_holiday|hm }}</td><td class="negative">{{ d.shortage|hm }}</td>{% endif %}<td>{% if d.status=='OK' %}<span class="badge ok">OK</span>{% else %}<span class="badge warn">{{ d.status }}</span>{% endif %}</td></tr>{% else %}<tr><td colspan="9" class="empty">Sem dados para esta competência.</td></tr>{% endfor %}
 </tbody></table></div></div>
 <p class="footnote">Falta = dia previsto de trabalho sem nenhuma batida. Batida incompleta = houve marcação, mas faltou ao menos uma batida esperada para a jornada. Esses dias são sinalizados para conferência e não entram automaticamente nos totais de hora extra/débito.</p>
 
@@ -70,16 +69,14 @@
   </div>
 
   {% if settings.bank_hours_enabled == '1' %}
-  <div class="print-summary four">
+  <div class="print-summary three">
     <div class="print-total"><span>Total trabalhado</span><strong>{{ totals.worked|hm }}</strong></div>
-    <div class="print-total"><span>Total previsto</span><strong>{{ totals.expected|hm }}</strong></div>
     <div class="print-total"><span>Saldo banco</span><strong>{{ totals.bank|hm }}</strong></div>
     <div class="print-total"><span>HE 100%</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
   </div>
   {% else %}
-  <div class="print-summary">
+  <div class="print-summary four">
     <div class="print-total"><span>Total trabalhado</span><strong>{{ totals.worked|hm }}</strong></div>
-    <div class="print-total"><span>Total previsto</span><strong>{{ totals.expected|hm }}</strong></div>
     <div class="print-total"><span>HE {{ settings.overtime_weekday_percent }}%</span><strong>{{ (totals.overtime_weekday + totals.overtime_saturday)|hm }}</strong></div>
     <div class="print-total"><span>HE 100%</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
     <div class="print-total"><span>Débitos</span><strong>{{ totals.shortage|hm }}</strong></div>
@@ -93,11 +90,11 @@
 
   <table class="print-table">
     {% if settings.bank_hours_enabled == '1' %}
-    <colgroup><col style="width:9%"><col style="width:7%"><col style="width:28%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:10%"><col style="width:13%"></colgroup>
-    <thead><tr><th>Data</th><th>Dia</th><th>Marcações</th><th>Trabalhado</th><th>Previsto</th><th>Banco</th><th>HE 100%</th><th>Observação</th></tr></thead>
+    <colgroup><col style="width:10%"><col style="width:8%"><col style="width:32%"><col style="width:12%"><col style="width:12%"><col style="width:11%"><col style="width:15%"></colgroup>
+    <thead><tr><th>Data</th><th>Dia</th><th>Marcações</th><th>Trabalhado</th><th>Banco</th><th>HE 100%</th><th>Observação</th></tr></thead>
     {% else %}
-    <colgroup><col style="width:8%"><col style="width:7%"><col style="width:25%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:15%"></colgroup>
-    <thead><tr><th>Data</th><th>Dia</th><th>Marcações</th><th>Trabalhado</th><th>Previsto</th><th>HE {{ settings.overtime_weekday_percent }}%</th><th>HE 100%</th><th>Débito</th><th>Observação</th></tr></thead>
+    <colgroup><col style="width:9%"><col style="width:8%"><col style="width:29%"><col style="width:11%"><col style="width:10%"><col style="width:10%"><col style="width:9%"><col style="width:14%"></colgroup>
+    <thead><tr><th>Data</th><th>Dia</th><th>Marcações</th><th>Trabalhado</th><th>HE {{ settings.overtime_weekday_percent }}%</th><th>HE 100%</th><th>Débito</th><th>Observação</th></tr></thead>
     {% endif %}
     <tbody>
     {% for d in days %}
@@ -106,7 +103,6 @@
         <td class="center">{{ d.weekday }}</td>
         <td class="punch-list">{% for p in d.punches %}{{ p.strftime('%H:%M') }}{% if not loop.last %} &nbsp; | &nbsp; {% endif %}{% else %}-{% endfor %}</td>
         <td class="center">{{ d.worked|hm }}</td>
-        <td class="center">{{ d.expected|hm }}</td>
         {% if settings.bank_hours_enabled == '1' %}
         <td class="center">{{ d.bank|hm }}</td>
         <td class="center">{{ d.overtime_sunday_holiday|hm }}</td>
