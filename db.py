@@ -23,7 +23,8 @@ DEFAULT_SETTINGS = {
     "overtime_daily_limit_minutes": "120",
     "overtime_excess_percent": "100",
     "bank_hours_enabled": "0",
-    "min_interval_minutes": "60",
+    # Alerta operacional: só sinaliza intervalo quando for MENOR que 30 min.
+    "min_interval_minutes": "30",
     "night_shift_enabled": "0",
     "night_start": "22:00",
     "night_end": "05:00",
@@ -147,6 +148,13 @@ def init_db(db_path: Path | str | None = None):
             conn.execute("ALTER TABLE month_closures ADD COLUMN punch_cutoff_id INTEGER NOT NULL DEFAULT 0")
         for key, value in DEFAULT_SETTINGS.items():
             conn.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (key, value))
+
+        # Migração da configuração antiga padrão (60 min) para a nova regra
+        # empresarial: alertar apenas quando o intervalo for menor que 30 min.
+        # Valores customizados diferentes de 60 são preservados.
+        conn.execute(
+            "UPDATE settings SET value='30' WHERE key='min_interval_minutes' AND value='60'"
+        )
 
 
 def get_settings(conn):
