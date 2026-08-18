@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Jornadas do mês | Ponto{% endblock %}
 {% block content %}
+{% set missing_ids = request.query_params.get('missing_ids','').split(',') %}
 <div class="topbar">
   <div>
     <h1>Jornadas da competência</h1>
@@ -25,7 +26,10 @@
 <div class="notice">Esta competência já está finalizada e não aceita alterações.</div>
 {% endif %}
 {% if request.query_params.get('error') == 'missing' %}
-<div class="notice">Não foi possível finalizar: {{ request.query_params.get('missing','0') }} colaborador(es) com batidas ainda estão sem jornada definida nesta competência.</div>
+<div class="notice">
+  <strong>Não foi possível finalizar: {{ request.query_params.get('missing','0') }} colaborador(es) com batidas ainda estão sem jornada definida nesta competência.</strong>
+  <div class="help" style="margin-top:6px;">O(s) colaborador(es) que estão bloqueando o fechamento aparecem destacados na lista abaixo. Isso pode incluir alguém que hoje esteja inativo, mas que possui batidas dentro de {{ month }}.</div>
+</div>
 {% elif request.query_params.get('error') == 'future' %}
 <div class="notice">Uma competência futura não pode ser finalizada.</div>
 {% endif %}
@@ -48,7 +52,7 @@
       <button class="button primary" type="submit">Aplicar jornadas padrão ao mês</button>
     </form>
   </div>
-  <p class="footnote">Esse botão não sobrescreve jornadas mensais já salvas.</p>
+  <p class="footnote">Esse botão não sobrescreve jornadas mensais já salvas e também considera quem possui batidas na competência, mesmo que esteja inativo atualmente.</p>
 </div>
 {% endif %}
 
@@ -59,10 +63,23 @@
       <thead><tr><th>Colaborador</th><th>Jornada padrão</th><th>Competência {{ month }}</th><th></th></tr></thead>
       <tbody>
       {% for employee in employees %}
-      <tr>
-        <td><strong>{{ employee.name }}</strong><small>{{ employee.external_id or 'sem identificador AFD' }}</small></td>
+      {% set blocks_closure = (employee.id|string) in missing_ids %}
+      <tr class="{% if blocks_closure %}row-warn{% endif %}">
+        <td>
+          <strong>{{ employee.name }}</strong>
+          <small>{{ employee.external_id or 'sem identificador AFD' }}</small>
+          {% if not employee.active %}<small style="margin-top:4px;">Inativo atualmente · possui histórico nesta competência</small>{% endif %}
+        </td>
         <td>{% if employee.has_default_schedule %}<span class="badge ok">Disponível</span>{% else %}<span class="badge warn">Não cadastrada</span>{% endif %}</td>
-        <td>{% if employee.has_month_schedule %}<span class="badge ok">Configurada</span>{% else %}<span class="badge warn">Pendente</span>{% endif %}</td>
+        <td>
+          {% if employee.has_month_schedule %}
+            <span class="badge ok">Configurada</span>
+          {% elif blocks_closure %}
+            <span class="badge warn">Pendente · bloqueia fechamento</span>
+          {% else %}
+            <span class="badge warn">Pendente</span>
+          {% endif %}
+        </td>
         <td><a class="button ghost" href="/month-schedules/{{ employee.id }}?month={{ month }}">{% if closure %}Visualizar{% elif employee.has_month_schedule %}Editar jornada do mês{% else %}Configurar jornada{% endif %}</a></td>
       </tr>
       {% else %}
