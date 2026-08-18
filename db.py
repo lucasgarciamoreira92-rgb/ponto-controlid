@@ -46,6 +46,23 @@ CREATE TABLE IF NOT EXISTS schedules (
     FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS monthly_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    is_workday INTEGER NOT NULL DEFAULT 0,
+    start1 TEXT,
+    end1 TEXT,
+    start2 TEXT,
+    end2 TEXT,
+    expected_minutes INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(employee_id, month, weekday),
+    FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -87,6 +104,7 @@ CREATE TABLE IF NOT EXISTS punches (
 
 CREATE INDEX IF NOT EXISTS idx_punches_employee_date ON punches(employee_id, punched_at);
 CREATE INDEX IF NOT EXISTS idx_punches_external_date ON punches(external_id, punched_at);
+CREATE INDEX IF NOT EXISTS idx_monthly_schedules_employee_month ON monthly_schedules(employee_id, month);
 '''
 
 @contextmanager
