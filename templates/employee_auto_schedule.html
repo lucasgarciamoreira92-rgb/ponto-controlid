@@ -36,7 +36,7 @@
 {% for item in suggestions %}
 {% set e = item.employee %}
 {% set inf = item.inference %}
-<section class="wizard-step" data-index="{{ loop.index0 }}" data-employee-name="{{ e.name }}" {% if not loop.first %}style="display:none;"{% endif %}>
+<section class="wizard-step" data-index="{{ loop.index0 }}" data-employee-name="{{ e.name }}" data-employee-id="{{ e.id }}" {% if not loop.first %}style="display:none;"{% endif %}>
   <input type="hidden" name="e{{ e.id }}_approved" id="approved-{{ e.id }}" value="0">
   <div class="card">
     <div class="section-head">
@@ -99,19 +99,18 @@
     <div class="section-head">
       <div>
         <h2>Revisão final</h2>
-        <p>Confira quem será atualizado. Só agora o sistema irá gravar as jornadas padrão.</p>
+        <p>Confira as decisões e os horários antes de gravar as jornadas padrão.</p>
       </div>
       <span class="badge ok" id="approved-count"></span>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Colaborador</th><th>Decisão</th></tr></thead>
+        <thead><tr><th>Colaborador</th><th>Decisão</th><th>Jornada aprovada</th><th></th></tr></thead>
         <tbody id="review-body"></tbody>
       </table>
     </div>
-    <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:18px;">
-      <button class="button ghost" type="button" id="back-to-last">← Voltar ao último colaborador</button>
-      <button class="button primary" type="submit">Salvar jornadas aprovadas</button>
+    <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:18px;">
+      <button class="button primary" type="submit">Salvar todas as jornadas aprovadas</button>
     </div>
   </div>
   <p class="footnote">Colaboradores pulados não terão a jornada alterada. As jornadas aprovadas ficam como jornada padrão e depois podem ser copiadas para a competência mensal.</p>
@@ -126,6 +125,7 @@
   const counter = document.getElementById('wizard-counter');
   const reviewBody = document.getElementById('review-body');
   const approvedCount = document.getElementById('approved-count');
+  const dayNames = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
   let current = 0;
 
   function showStep(index) {
@@ -137,6 +137,26 @@
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
+  function scheduleSummary(step) {
+    const id = step.dataset.employeeId;
+    const parts = [];
+    for (let day = 0; day <= 6; day++) {
+      const active = step.querySelector('[name="e' + id + '_d' + day + '_active"]');
+      if (!active || !active.checked) continue;
+      const s1 = step.querySelector('[name="e' + id + '_d' + day + '_start1"]').value;
+      const e1 = step.querySelector('[name="e' + id + '_d' + day + '_end1"]').value;
+      const s2 = step.querySelector('[name="e' + id + '_d' + day + '_start2"]').value;
+      const e2 = step.querySelector('[name="e' + id + '_d' + day + '_end2"]').value;
+      const hours = step.querySelector('[name="e' + id + '_d' + day + '_hours"]').value;
+      let text = dayNames[day] + ': ';
+      if (s1 && e1) text += s1 + '–' + e1;
+      if (s2 && e2) text += ' / ' + s2 + '–' + e2;
+      if ((!s1 || !e1) && hours) text += hours + 'h';
+      parts.push(text);
+    }
+    return parts.length ? parts.join(' · ') : 'Nenhum dia marcado como jornada';
+  }
+
   function buildReview() {
     steps.forEach(step => step.style.display = 'none');
     finalReview.style.display = '';
@@ -144,20 +164,38 @@
     counter.textContent = steps.length + ' revisados';
     reviewBody.innerHTML = '';
     let approved = 0;
-    steps.forEach(step => {
+    steps.forEach((step, index) => {
       const hidden = step.querySelector('input[id^="approved-"]');
       const ok = hidden && hidden.value === '1';
       if (ok) approved += 1;
+
       const tr = document.createElement('tr');
       const name = document.createElement('td');
       name.innerHTML = '<strong>' + step.dataset.employeeName + '</strong>';
+
       const decision = document.createElement('td');
       decision.innerHTML = ok ? '<span class="badge ok">Aprovada</span>' : '<span class="badge">Sem alteração</span>';
+
+      const summary = document.createElement('td');
+      summary.innerHTML = ok ? '<small>' + scheduleSummary(step) + '</small>' : '—';
+
+      const action = document.createElement('td');
+      action.innerHTML = '<button class="link-button review-employee" type="button" data-index="' + index + '">Revisar</button>';
+
       tr.appendChild(name);
       tr.appendChild(decision);
+      tr.appendChild(summary);
+      tr.appendChild(action);
       reviewBody.appendChild(tr);
     });
     approvedCount.textContent = approved + ' jornada(s) para salvar';
+
+    document.querySelectorAll('.review-employee').forEach(button => {
+      button.addEventListener('click', function () {
+        showStep(Number(this.dataset.index));
+      });
+    });
+
     window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
@@ -186,10 +224,6 @@
     button.addEventListener('click', function () {
       if (current > 0) showStep(current - 1);
     });
-  });
-
-  document.getElementById('back-to-last').addEventListener('click', function () {
-    showStep(steps.length - 1);
   });
 })();
 </script>
