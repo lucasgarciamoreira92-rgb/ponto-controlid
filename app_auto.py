@@ -1,12 +1,44 @@
 from __future__ import annotations
 
 from collections import Counter
+from datetime import datetime
+from pathlib import Path
 
-from fastapi import Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
-from app import app, templates, connect, WEEKDAYS, derive_expected_minutes
+from app import (
+    BASE_DIR,
+    WEEKDAYS,
+    _load_employee_month,
+    _month_closure,
+    _settings_for_month,
+    app,
+    connect,
+    derive_expected_minutes,
+    templates,
+)
+from pdf_reports import build_monthly_pdf
 from schedule_inference import infer_employee_schedule
+
+
+CLOSED_REPORTS_DIR = BASE_DIR / "data" / "closed_reports"
+CLOSED_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+MONTH_NAMES = {
+    "01": "Janeiro",
+    "02": "Fevereiro",
+    "03": "Março",
+    "04": "Abril",
+    "05": "Maio",
+    "06": "Junho",
+    "07": "Julho",
+    "08": "Agosto",
+    "09": "Setembro",
+    "10": "Outubro",
+    "11": "Novembro",
+    "12": "Dezembro",
+}
 
 
 def _schedule_dict(row) -> dict:
@@ -80,6 +112,148 @@ def _quick_prefill(days: dict[int, dict], protect_existing: bool) -> tuple[dict,
     else:
         selected = {0, 1, 2, 3, 4, 5}
     return quick, selected
+
+
+def _validate_closed_month(month: str) -> str:
+    try:
+        datetime.strptime(month, "%Y-%m")
+    except ValueError as exc:
+        raise HTTPException(404, "Competência inválida") from exc
+    return month
+
+
+def _closed_month_employees(conn, month: str, closure):
+    return conn.execute(
+        """
+        SELECT DISTINCT e.*
+        FROM employees e
+        WHERE EXISTS(
+            SELECT 1
+            FROM monthly_schedules ms
+            WHERE ms.employee_id=e.id AND ms.month=?
+        )
+        OR EXISTS(
+            SELECT 1
+            FROM punches p
+            WHERE p.employee_id=e.id
+              AND p.punched_at LIKE ?
+              AND p.id <= ?
+        )
+        ORDER BY e.name
+        """,
+        (month, month + "-%", int(closure["punch_cutoff_id"] or 0)),
+    ).fetchall()
+
+
+def _month_label(month: str) -> str:
+    year, mon = month.split("-", 1)
+    return f"{MONTH_NAMES.get(mon, mon)}/{year}"
+
+
+def _archive_path(month: str) -> Path:
+    return CLOSED_REPORTS_DIR / f"espelho_ponto_{month}.pdf"
+
+
+def _human_size(size: int) -> str:
+    if size < 1024:
+        return f"{size} B"
+    if size < 1024 * 1024:
+        return f"{size / 1024:.0f} KB"
+    return f"{size / (1024 * 1024):.1f} MB"
+
+
+def _closed_month_report_data(conn, month: str, closure):
+    settings = _settings_for_month(conn, month, closure)
+    employees = _closed_month_employees(conn, month, closure)
+    reports = []
+
+    for employee in employees:
+        days = _load_employee_month(conn, employee, month)
+        totals = {
+            "worked": sum(d["worked"] for d in days),
+            "overtime_weekday": sum(d["overtime_weekday"] for d in days),
+            "overtime_saturday": sum(d["overtime_saturday"] for d in days),
+            "overtime_sunday_holiday": sum(
+                d["overtime_sunday_holiday"] for d in days
+            ),
+            "shortage": sum(d["shortage"] for d in days),
+            "bank": sum(d["bank"] for d in days),
+        }
+        reports.append(
+            {
+                "employee": dict(employee),
+                "days": days,
+                "totals": totals,
+                "absence_count": sum(1 for d in days if d.get("absence")),
+                "forgotten_count": sum(
+                    1 for d in days if d.get("forgotten_punch")
+                ),
+            }
+        )
+
+    return settings, reports
+
+
+def _ensure_closed_month_pdf(month: str) -> Path:
+    month = _validate_closed_month(month)
+    path = _archive_path(month)
+    if path.exists() and path.stat().st_size > 0:
+        return path
+
+    with connect() as conn:
+        closure = _month_closure(conn, month)
+        if not closure:
+            raise HTTPException(404, "Competência ainda não foi finalizada")
+        settings, reports = _closed_month_report_data(conn, month, closure)
+        pdf_bytes = build_monthly_pdf(month, closure, settings, reports)
+
+    tmp_path = path.with_name(path.name + ".tmp")
+    tmp_path.write_bytes(pdf_bytes)
+    tmp_path.replace(path)
+    return path
+
+
+@app.get("/closures", response_class=HTMLResponse)
+def closed_competences_page(request: Request):
+    items = []
+    with connect() as conn:
+        closures = conn.execute(
+            "SELECT * FROM month_closures ORDER BY month DESC"
+        ).fetchall()
+        for closure in closures:
+            month = str(closure["month"])
+            employee_count = len(_closed_month_employees(conn, month, closure))
+            path = _archive_path(month)
+            archived = path.exists() and path.stat().st_size > 0
+            items.append(
+                {
+                    "month": month,
+                    "label": _month_label(month),
+                    "finalized_at": closure["finalized_at"],
+                    "employee_count": employee_count,
+                    "archived": archived,
+                    "file_size": _human_size(path.stat().st_size) if archived else "",
+                }
+            )
+
+    return templates.TemplateResponse(
+        "closures.html",
+        {
+            "request": request,
+            "closures": items,
+        },
+    )
+
+
+@app.get("/closures/{month}/pdf")
+def closed_competence_pdf(month: str):
+    path = _ensure_closed_month_pdf(month)
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        filename=f"espelho_ponto_{month}.pdf",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/employees/auto-schedule", response_class=HTMLResponse)
