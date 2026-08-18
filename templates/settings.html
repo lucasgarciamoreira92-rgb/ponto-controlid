@@ -1,8 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Configurações{% endblock %}
 {% block content %}
-<div class="topbar"><div><h1>Configurações</h1><p>Regras de apuração editáveis, sem deixar o cálculo engessado.</p></div></div>
+<div class="topbar"><div><h1>Configurações</h1><p>Regras de apuração, segurança da base e continuidade operacional.</p></div></div>
 {% if request.query_params.get('saved') %}<div class="notice success">Configurações salvas.</div>{% endif %}
+{% if request.query_params.get('restored') %}
+<div class="notice success" style="display:block;">
+  <strong>Backup restaurado com sucesso.</strong>
+  <div class="help" style="margin-top:4px;">A base, os AFDs armazenados e os documentos arquivados foram restaurados. Antes da troca o Atlas criou automaticamente uma cópia de segurança da base que estava nesta máquina{% if request.query_params.get('safety') %}: <code>{{ request.query_params.get('safety') }}</code>{% endif %}.</div>
+</div>
+{% endif %}
+{% if request.query_params.get('backup_error') %}<div class="notice warn"><strong>Restauração não realizada.</strong><div class="help" style="margin-top:4px;">{{ request.query_params.get('backup_error') }}</div></div>{% endif %}
 <form method="post">
 <div class="card"><h2>Empresa e regras de marcação</h2><div class="form-grid two">
 <label>Nome da empresa / painel<input name="company_name" value="{{ settings.company_name }}"></label>
@@ -34,4 +41,32 @@
 <div class="card"><h2>Feriados</h2><p class="help">Um por linha no formato <code>AAAA-MM-DD | Descrição</code>.</p><textarea name="holidays" rows="8" placeholder="2026-09-20 | Revolução Farroupilha">{{ holiday_text }}</textarea></div>
 <div class="savebar"><button class="button primary" type="submit">Salvar configurações</button></div>
 </form>
+
+<div class="card" id="backup-restauracao">
+  <div class="section-head">
+    <div>
+      <h2>Backup e restauração</h2>
+      <p>Transfira a operação para outra máquina ou preserve uma cópia completa antes de qualquer manutenção.</p>
+    </div>
+  </div>
+  <div class="form-grid two" style="align-items:start;">
+    <div>
+      <h3 style="margin-top:0;">Baixar backup completo</h3>
+      <p class="help">Gera um único arquivo ZIP com o banco SQLite, colaboradores, batidas, jornadas, competências fechadas, configurações, cadastro do REP, AFDs armazenados e PDFs arquivados.</p>
+      <a class="button primary" href="/backup/download">Baixar backup completo</a>
+    </div>
+    <div>
+      <h3 style="margin-top:0;">Restaurar um backup</h3>
+      <p class="help">O Atlas valida o ZIP e a integridade do SQLite antes de alterar qualquer dado. Também cria automaticamente um backup da base atual antes da restauração.</p>
+      <form method="post" action="/backup/restore" enctype="multipart/form-data" onsubmit="return confirm('Restaurar este backup substituirá a base atual desta máquina. O Atlas criará uma cópia de segurança antes de continuar. Deseja prosseguir?');">
+        <label>Arquivo de backup do Atlas Ponto<input type="file" name="file" accept=".zip,application/zip" required></label>
+        <div style="margin-top:12px;"><button class="button ghost" type="submit">Restaurar backup</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="notice" style="display:block;margin-top:18px;">
+    <strong>Para migrar do Mac para o Windows</strong>
+    <div class="help" style="margin-top:4px;">No Mac: atualize o Atlas e clique em <b>Baixar backup completo</b>. No Windows: instale o Atlas Ponto, abra Configurações e use <b>Restaurar backup</b>. Não é necessário entrar em pastas nem copiar o arquivo <code>ponto.db</code> manualmente.</div>
+  </div>
+</div>
 {% endblock %}
