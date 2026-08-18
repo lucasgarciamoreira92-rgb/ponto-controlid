@@ -11,10 +11,11 @@
   .print-report{display:block!important;position:absolute;inset:0;width:100%;margin:0;padding:0;color:#111!important;background:#fff!important}
 
   .print-report h1,.print-report h2,.print-report p{margin:0}
-  .print-report-header{border-bottom:2px solid #6f8457;padding-bottom:7px;margin-bottom:9px}
+  .print-report-header{border-bottom:2px solid #6f8457;padding-bottom:7px;margin-bottom:9px;position:relative}
   .print-company{font-size:8.5pt;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#4d5549;margin-bottom:3px}
   .print-title{font-size:16pt;font-weight:800;letter-spacing:-.02em;color:#111}
   .print-subtitle{font-size:8.5pt;color:#666;margin-top:2px!important}
+  .print-preview{position:absolute;right:0;top:0;border:1px solid #c98758;background:#fff6ee;color:#a65d2f;border-radius:4px;padding:4px 7px;font-size:6.8pt;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
 
   .print-meta{display:grid;grid-template-columns:2fr 1fr;gap:8px;margin:8px 0 9px}
   .print-meta-box{border:1px solid #d8ddd5;border-radius:5px;padding:6px 8px;background:#fafbf9}
@@ -22,6 +23,7 @@
   .print-meta-box strong{font-size:10pt;color:#111}
 
   .print-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:9px}
+  .print-summary.four{grid-template-columns:repeat(4,1fr)}
   .print-summary.three{grid-template-columns:repeat(3,1fr)}
   .print-total{border:1px solid #d8ddd5;border-radius:5px;padding:5px 7px}
   .print-total span{display:block;font-size:6.6pt;color:#70756d;text-transform:uppercase;letter-spacing:.045em;font-weight:700;margin-bottom:2px}
