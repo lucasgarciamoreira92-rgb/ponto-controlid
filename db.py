@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS monthly_schedules (
 CREATE TABLE IF NOT EXISTS month_closures (
     month TEXT PRIMARY KEY,
     finalized_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    punch_cutoff_id INTEGER NOT NULL DEFAULT 0,
     settings_json TEXT NOT NULL,
     holidays_json TEXT NOT NULL
 );
@@ -131,6 +132,9 @@ def connect(db_path: Path | str | None = None):
 def init_db(db_path: Path | str | None = None):
     with connect(db_path) as conn:
         conn.executescript(SCHEMA)
+        closure_columns = {row["name"] for row in conn.execute("PRAGMA table_info(month_closures)").fetchall()}
+        if "punch_cutoff_id" not in closure_columns:
+            conn.execute("ALTER TABLE month_closures ADD COLUMN punch_cutoff_id INTEGER NOT NULL DEFAULT 0")
         for key, value in DEFAULT_SETTINGS.items():
             conn.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (key, value))
 
