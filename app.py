@@ -32,7 +32,11 @@ WEEKDAYS = [(0, "Segunda"), (1, "Terça"), (2, "Quarta"), (3, "Quinta"), (4, "Se
 
 def _month_value(value: Optional[str]) -> str:
     if value and len(value) == 7:
-        return value
+        try:
+            datetime.strptime(value, "%Y-%m")
+            return value
+        except ValueError:
+            pass
     return datetime.now().strftime("%Y-%m")
 
 
@@ -41,8 +45,32 @@ def _schedules_by_weekday(conn, employee_id: int):
     return {int(r["weekday"]): r for r in rows}
 
 
+def _monthly_schedules_by_weekday(conn, employee_id: int, month: str):
+    rows = conn.execute(
+        "SELECT * FROM monthly_schedules WHERE employee_id=? AND month=? ORDER BY weekday",
+        (employee_id, month),
+    ).fetchall()
+    return {int(r["weekday"]): r for r in rows}
+
+
 def _holiday_set(conn):
     return {r["holiday_date"] for r in conn.execute("SELECT holiday_date FROM holidays").fetchall()}
+
+
+def _schedule_form_values(form, weekday: int):
+    prefix = f"d{weekday}_"
+    is_workday = 1 if form.get(prefix + "active") else 0
+    start1 = str(form.get(prefix + "start1", "")).strip() or None
+    end1 = str(form.get(prefix + "end1", "")).strip() or None
+    start2 = str(form.get(prefix + "start2", "")).strip() or None
+    end2 = str(form.get(prefix + "end2", "")).strip() or None
+    fallback_hours = str(form.get(prefix + "hours", "0") or "0").replace(",", ".")
+    try:
+        fallback_minutes = int(round(float(fallback_hours) * 60))
+    except ValueError:
+        fallback_minutes = 0
+    expected = derive_expected_minutes(start1, end1, start2, end2, fallback_minutes) if is_workday else 0
+    return is_workday, start1, end1, start2, end2, expected
 
 
 def _load_employee_month(conn, employee, month: str):
@@ -57,14 +85,15 @@ def _load_employee_month(conn, employee, month: str):
         dt = datetime.fromisoformat(row["punched_at"])
         by_day[dt.date()].append(dt)
 
-    schedules = _schedules_by_weekday(conn, employee["id"])
+    # A apuração usa somente a jornada congelada na competência escolhida.
+    # A tabela schedules permanece como jornada padrão/modelo para meses futuros.
+    schedules = _monthly_schedules_by_weekday(conn, employee["id"], month)
     settings = get_settings(conn)
     holidays = _holiday_set(conn)
 
     days = []
     for d in month_dates(year, mon):
         schedule = schedules.get(d.weekday())
-        # Exibe dias com marcação e dias de trabalho configurados.
         if by_day.get(d) or (schedule and int(schedule["is_workday"])):
             days.append(analyze_day(d, by_day.get(d, []), schedule, settings, holidays))
     return days
@@ -77,10 +106,18 @@ def dashboard(request: Request, month: Optional[str] = None):
         employees = conn.execute("SELECT * FROM employees WHERE active=1 ORDER BY name").fetchall()
         summaries = []
         totals = {"worked": 0, "overtime_weekday": 0, "overtime_saturday": 0, "overtime_sunday_holiday": 0, "shortage": 0, "bank": 0, "issues": 0}
+        configured_count = 0
         for e in employees:
+            month_configured = conn.execute(
+                "SELECT 1 FROM monthly_schedules WHERE employee_id=? AND month=? LIMIT 1",
+                (e["id"], month),
+            ).fetchone() is not None
+            if month_configured:
+                configured_count += 1
             days = _load_employee_month(conn, e, month)
             s = {
                 "employee": e,
+                "month_configured": month_configured,
                 "worked": sum(d["worked"] for d in days),
                 "overtime_weekday": sum(d["overtime_weekday"] for d in days),
                 "overtime_saturday": sum(d["overtime_saturday"] for d in days),
@@ -94,7 +131,131 @@ def dashboard(request: Request, month: Optional[str] = None):
                 totals[k] += s[k] if k in s else 0
         last_import = conn.execute("SELECT * FROM imports ORDER BY id DESC LIMIT 1").fetchone()
         settings = get_settings(conn)
-    return templates.TemplateResponse("dashboard.html", {"request": request, "month": month, "summaries": summaries, "totals": totals, "last_import": last_import, "settings": settings})
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "month": month,
+            "summaries": summaries,
+            "totals": totals,
+            "last_import": last_import,
+            "settings": settings,
+            "configured_count": configured_count,
+            "employee_count": len(employees),
+        },
+    )
+
+
+@app.get("/month-schedules", response_class=HTMLResponse)
+def month_schedules_page(request: Request, month: Optional[str] = None):
+    month = _month_value(month)
+    with connect() as conn:
+        employees = conn.execute(
+            """
+            SELECT e.*,
+                   EXISTS(SELECT 1 FROM schedules s WHERE s.employee_id=e.id) AS has_default_schedule,
+                   EXISTS(SELECT 1 FROM monthly_schedules ms WHERE ms.employee_id=e.id AND ms.month=?) AS has_month_schedule
+            FROM employees e
+            WHERE e.active=1
+            ORDER BY e.name
+            """,
+            (month,),
+        ).fetchall()
+    return templates.TemplateResponse(
+        "month_schedules.html",
+        {"request": request, "month": month, "employees": employees},
+    )
+
+
+@app.post("/month-schedules/copy-defaults")
+async def month_schedules_copy_defaults(request: Request):
+    form = await request.form()
+    month = _month_value(str(form.get("month", "")))
+    copied = 0
+    skipped = 0
+    with connect() as conn:
+        employees = conn.execute("SELECT id FROM employees WHERE active=1 ORDER BY name").fetchall()
+        for employee in employees:
+            employee_id = employee["id"]
+            already = conn.execute(
+                "SELECT 1 FROM monthly_schedules WHERE employee_id=? AND month=? LIMIT 1",
+                (employee_id, month),
+            ).fetchone()
+            if already:
+                skipped += 1
+                continue
+            defaults = conn.execute(
+                "SELECT * FROM schedules WHERE employee_id=? ORDER BY weekday",
+                (employee_id,),
+            ).fetchall()
+            if not defaults:
+                skipped += 1
+                continue
+            for row in defaults:
+                conn.execute(
+                    "INSERT INTO monthly_schedules(employee_id,month,weekday,is_workday,start1,end1,start2,end2,expected_minutes) VALUES (?,?,?,?,?,?,?,?,?)",
+                    (
+                        employee_id,
+                        month,
+                        row["weekday"],
+                        row["is_workday"],
+                        row["start1"],
+                        row["end1"],
+                        row["start2"],
+                        row["end2"],
+                        row["expected_minutes"],
+                    ),
+                )
+            copied += 1
+    return RedirectResponse(
+        f"/month-schedules?month={month}&copied={copied}&skipped={skipped}",
+        status_code=303,
+    )
+
+
+@app.get("/month-schedules/{employee_id}", response_class=HTMLResponse)
+def month_schedule_edit(request: Request, employee_id: int, month: Optional[str] = None):
+    month = _month_value(month)
+    with connect() as conn:
+        employee = conn.execute("SELECT * FROM employees WHERE id=?", (employee_id,)).fetchone()
+        if not employee:
+            raise HTTPException(404)
+        monthly = _monthly_schedules_by_weekday(conn, employee_id, month)
+        defaults = _schedules_by_weekday(conn, employee_id)
+        schedules = monthly if monthly else defaults
+        source = "month" if monthly else ("default" if defaults else "empty")
+    return templates.TemplateResponse(
+        "month_schedule_form.html",
+        {
+            "request": request,
+            "employee": employee,
+            "month": month,
+            "schedules": schedules,
+            "weekdays": WEEKDAYS,
+            "source": source,
+        },
+    )
+
+
+@app.post("/month-schedules/{employee_id}/save")
+async def month_schedule_save(request: Request, employee_id: int):
+    form = await request.form()
+    month = _month_value(str(form.get("month", "")))
+    with connect() as conn:
+        employee = conn.execute("SELECT id FROM employees WHERE id=?", (employee_id,)).fetchone()
+        if not employee:
+            raise HTTPException(404)
+        for weekday, _label in WEEKDAYS:
+            is_workday, start1, end1, start2, end2, expected = _schedule_form_values(form, weekday)
+            conn.execute(
+                "INSERT INTO monthly_schedules(employee_id,month,weekday,is_workday,start1,end1,start2,end2,expected_minutes) VALUES (?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(employee_id,month,weekday) DO UPDATE SET is_workday=excluded.is_workday,start1=excluded.start1,end1=excluded.end1,start2=excluded.start2,end2=excluded.end2,expected_minutes=excluded.expected_minutes,updated_at=CURRENT_TIMESTAMP",
+                (employee_id, month, weekday, is_workday, start1, end1, start2, end2, expected),
+            )
+    return RedirectResponse(
+        f"/month-schedules/{employee_id}?month={month}&saved=1",
+        status_code=303,
+    )
 
 
 @app.get("/import", response_class=HTMLResponse)
@@ -127,7 +288,6 @@ async def import_afd(file: UploadFile = File(...)):
         )
         import_id = cur.lastrowid
 
-        # Mantém o cadastro mais recente encontrado no AFD para cada identificador.
         latest = {}
         for er in parsed.employees:
             latest[er.external_id] = er
@@ -136,7 +296,6 @@ async def import_afd(file: UploadFile = File(...)):
                 "INSERT INTO employees(external_id, name, active) VALUES (?,?,1) ON CONFLICT(external_id) DO UPDATE SET name=excluded.name, updated_at=CURRENT_TIMESTAMP",
                 (ext, er.name),
             )
-        # Alguns AFDs podem conter batidas de pessoas cujo registro 5 não está no recorte exportado.
         for p in parsed.punches:
             row = conn.execute("SELECT id FROM employees WHERE external_id=?", (p.external_id,)).fetchone()
             if not row:
@@ -152,7 +311,6 @@ async def import_afd(file: UploadFile = File(...)):
                 )
                 inserted += 1
             except sqlite3.IntegrityError:
-                # Mesma batida já importada em outro AFD acumulado.
                 pass
         conn.execute("UPDATE imports SET punch_count=? WHERE id=?", (inserted, import_id))
     return RedirectResponse(f"/import?ok={inserted}", status_code=303)
@@ -195,7 +353,6 @@ async def employee_import(file: UploadFile = File(...)):
             name_key = normalized_name.casefold()
             ext = normalize_external_id(row.external_id or "") or None
 
-            # Não processa linhas duplicadas dentro do mesmo arquivo mais de uma vez.
             if ext and ext in seen_ids:
                 skipped += 1
                 continue
@@ -218,8 +375,6 @@ async def employee_import(file: UploadFile = File(...)):
                         updated += 1
                         continue
 
-                    # Se já existe manualmente pelo mesmo nome e ainda não tem identificador,
-                    # associa o identificador em vez de criar um cadastro duplicado.
                     by_name = conn.execute(
                         "SELECT id FROM employees WHERE lower(name)=lower(?) AND (external_id IS NULL OR external_id='') ORDER BY id LIMIT 1",
                         (normalized_name,),
@@ -292,18 +447,7 @@ async def employee_save(request: Request):
             return RedirectResponse("/employees?error=external_id", status_code=303)
 
         for weekday, _label in WEEKDAYS:
-            prefix = f"d{weekday}_"
-            is_workday = 1 if form.get(prefix + "active") else 0
-            start1 = str(form.get(prefix + "start1", "")).strip() or None
-            end1 = str(form.get(prefix + "end1", "")).strip() or None
-            start2 = str(form.get(prefix + "start2", "")).strip() or None
-            end2 = str(form.get(prefix + "end2", "")).strip() or None
-            fallback_hours = str(form.get(prefix + "hours", "0") or "0").replace(",", ".")
-            try:
-                fallback_minutes = int(round(float(fallback_hours) * 60))
-            except ValueError:
-                fallback_minutes = 0
-            expected = derive_expected_minutes(start1, end1, start2, end2, fallback_minutes) if is_workday else 0
+            is_workday, start1, end1, start2, end2, expected = _schedule_form_values(form, weekday)
             conn.execute(
                 "INSERT INTO schedules(employee_id, weekday, is_workday, start1, end1, start2, end2, expected_minutes) VALUES (?,?,?,?,?,?,?,?) "
                 "ON CONFLICT(employee_id,weekday) DO UPDATE SET is_workday=excluded.is_workday,start1=excluded.start1,end1=excluded.end1,start2=excluded.start2,end2=excluded.end2,expected_minutes=excluded.expected_minutes",
@@ -366,6 +510,10 @@ def employee_report(request: Request, employee_id: int, month: Optional[str] = N
         employee = conn.execute("SELECT * FROM employees WHERE id=?", (employee_id,)).fetchone()
         if not employee:
             raise HTTPException(404)
+        month_configured = conn.execute(
+            "SELECT 1 FROM monthly_schedules WHERE employee_id=? AND month=? LIMIT 1",
+            (employee_id, month),
+        ).fetchone() is not None
         days = _load_employee_month(conn, employee, month)
         settings = get_settings(conn)
     totals = {
@@ -377,7 +525,18 @@ def employee_report(request: Request, employee_id: int, month: Optional[str] = N
         "shortage": sum(d["shortage"] for d in days),
         "bank": sum(d["bank"] for d in days),
     }
-    return templates.TemplateResponse("employee_report.html", {"request": request, "employee": employee, "month": month, "days": days, "totals": totals, "settings": settings})
+    return templates.TemplateResponse(
+        "employee_report.html",
+        {
+            "request": request,
+            "employee": employee,
+            "month": month,
+            "days": days,
+            "totals": totals,
+            "settings": settings,
+            "month_configured": month_configured,
+        },
+    )
 
 
 @app.get("/health")
