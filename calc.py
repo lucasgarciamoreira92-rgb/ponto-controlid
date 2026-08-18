@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta, time
 from calendar import monthrange
 
 WEEKDAY_NAMES = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+DAILY_STANDARD_OVERTIME_LIMIT_MINUTES = 120
 
 
 def hm(minutes: int | float | None) -> str:
@@ -82,24 +83,40 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
 
     overtime_weekday = 0
     overtime_saturday = 0
+    # Bucket de HE 100%: inclui domingo/feriado e também todo excedente diário
+    # acima das primeiras 2 horas extras em dias úteis/sábado.
     overtime_sunday_holiday = 0
+    overtime_excess_100 = 0
     shortage = 0
     bank = 0
     missing_punches = is_workday and not punches
     review_required = incomplete or missing_punches or not schedule_configured
 
     if not review_required:
-        if settings.get("bank_hours_enabled") == "1":
-            bank = delta
-        elif delta > 0:
+        if delta > 0:
+            # Domingo e feriado continuam integralmente no bucket de HE 100%.
             if holiday or day.weekday() == 6:
                 overtime_sunday_holiday = delta
-            elif day.weekday() == 5:
-                overtime_saturday = delta
             else:
-                overtime_weekday = delta
+                standard_part = min(delta, DAILY_STANDARD_OVERTIME_LIMIT_MINUTES)
+                overtime_excess_100 = max(
+                    0, delta - DAILY_STANDARD_OVERTIME_LIMIT_MINUTES
+                )
+                overtime_sunday_holiday = overtime_excess_100
+
+                if settings.get("bank_hours_enabled") == "1":
+                    # Mesmo com banco de horas habilitado, o excedente acima de 2h
+                    # não é bancado: permanece HE 100%.
+                    bank = standard_part
+                elif day.weekday() == 5:
+                    overtime_saturday = standard_part
+                else:
+                    overtime_weekday = standard_part
         elif delta < 0:
-            shortage = abs(delta)
+            if settings.get("bank_hours_enabled") == "1":
+                bank = delta
+            else:
+                shortage = abs(delta)
 
     status = []
     if not schedule_configured:
@@ -126,6 +143,7 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
         "overtime_weekday": overtime_weekday,
         "overtime_saturday": overtime_saturday,
         "overtime_sunday_holiday": overtime_sunday_holiday,
+        "overtime_excess_100": overtime_excess_100,
         "shortage": shortage,
         "bank": bank,
         "review_required": review_required,
