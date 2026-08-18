@@ -37,6 +37,12 @@
         </span>
         <span>Importar AFD</span>
       </a>
+      <a href="/devices" class="{% if current_path.startswith('/devices') %}active{% endif %}">
+        <span class="nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M9 16h6"/></svg>
+        </span>
+        <span>Equipamentos</span>
+      </a>
       <a href="/employees" class="{% if current_path.startswith('/employees') or current_path.startswith('/month-schedules') or current_path.startswith('/report') %}active{% endif %}">
         <span class="nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M16 20v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2m7-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.87M16 2.13a4 4 0 0 1 0 7.75"/></svg>
