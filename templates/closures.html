@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Competências fechadas | Atlas Ponto{% endblock %}
+{% block content %}
+<div class="topbar">
+  <div>
+    <div class="eyebrow"><span class="eyebrow-dot"></span> ARQUIVO MENSAL</div>
+    <h1>Competências fechadas</h1>
+    <p>Repositório dos espelhos mensais consolidados. Cada PDF contém uma página por colaborador.</p>
+  </div>
+</div>
+
+{% if request.query_params.get('finalized') %}
+<div class="notice success">
+  <strong>Competência {{ request.query_params.get('finalized') }} finalizada.</strong>
+  <div class="help" style="margin-top:4px;">O PDF consolidado já pode ser baixado abaixo.</div>
+</div>
+{% endif %}
+
+<div class="card data-panel">
+  <div class="section-head">
+    <div>
+      <h2>Arquivo de fechamento</h2>
+      <p>Os relatórios usam exclusivamente jornadas, regras, feriados e batidas congelados no fechamento de cada competência.</p>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Competência</th>
+          <th>Fechamento</th>
+          <th>Colaboradores</th>
+          <th>PDF consolidado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for item in closures %}
+        <tr>
+          <td><strong>{{ item.label }}</strong><small>{{ item.month }}</small></td>
+          <td>{{ item.finalized_at }}</td>
+          <td>{{ item.employee_count }}</td>
+          <td>
+            {% if item.archived %}
+              <span class="badge ok">Arquivado · {{ item.file_size }}</span>
+            {% else %}
+              <span class="badge warn">Gerado no primeiro download</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <a class="button primary" href="/closures/{{ item.month }}/pdf">Baixar PDF completo</a>
+            <a class="button ghost" href="/month-schedules?month={{ item.month }}">Ver competência</a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">Nenhuma competência foi finalizada ainda.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="notice" style="display:block;">
+  <strong>Um arquivo por competência</strong>
+  <div class="help" style="margin-top:4px;">O PDF consolidado é arquivado localmente na primeira geração. Depois disso, o mesmo arquivo fechado é entregue nos downloads seguintes, evitando alterações silenciosas no documento já emitido.</div>
+</div>
+{% endblock %}
