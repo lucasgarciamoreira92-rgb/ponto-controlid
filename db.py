@@ -12,6 +12,11 @@ DEFAULT_SETTINGS = {
     "overtime_weekday_percent": "50",
     "overtime_saturday_percent": "50",
     "overtime_sunday_holiday_percent": "100",
+    # Regra vigente para novas competências: sábado possui jornada normal
+    # empresarial de 4 horas. O que exceder 4h entra na apuração de HE:
+    # até 2h extras na faixa normal e o excedente em HE 100%.
+    # A chave também entra no snapshot ao finalizar a competência.
+    "saturday_standard_minutes": "240",
     # Regra fixa vigente para novas competências: até 2h extras/dia na faixa
     # normal; excedente acima de 120 minutos classificado em HE 100%.
     # Esses campos entram no snapshot da competência quando ela é finalizada.
