@@ -1,45 +1,98 @@
 {% extends "base.html" %}
-{% block title %}Dashboard | Ponto{% endblock %}
+{% block title %}Dashboard | Atlas Ponto{% endblock %}
 {% block content %}
-<div class="topbar">
-  <div><h1>Dashboard</h1><p>Apuração mensal de jornada e horas extras.</p></div>
-  <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Atualizar</button></form>
+<div class="topbar dashboard-topbar">
+  <div>
+    <div class="eyebrow"><span class="eyebrow-dot"></span> CONTROLE DE JORNADA · {{ month }}</div>
+    <h1>Visão geral da jornada</h1>
+    <p>Apuração mensal de horas, extras, divergências e fechamento da competência.</p>
+  </div>
+  <form method="get" class="month-form">
+    <input type="month" name="month" value="{{ month }}" aria-label="Selecionar competência">
+    <button>Atualizar</button>
+  </form>
 </div>
 
 {% if closure %}
-<div class="notice success" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-  <div>
-    <strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong>
-    <div class="help" style="margin-top:4px;">Fechada em {{ closure.finalized_at }}. Os cálculos usam as regras e batidas congeladas no fechamento.</div>
+<div class="notice success status-strip" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+  <div class="status-strip-copy">
+    <span class="status-symbol">✓</span>
+    <div>
+      <strong>Competência {{ month }} finalizada · somente leitura</strong>
+      <div class="help">Fechada em {{ closure.finalized_at }}. Os cálculos usam regras e batidas congeladas no fechamento.</div>
+    </div>
   </div>
   <a class="button ghost" href="/month-schedules?month={{ month }}">Ver jornadas congeladas</a>
 </div>
 {% else %}
-<div class="notice {% if configured_count == employee_count and employee_count > 0 %}success{% endif %}" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
-  <div>
-    <strong>Jornada da competência {{ month }}</strong>
-    <div class="help" style="margin-top:4px;">
-      {{ configured_count }} de {{ employee_count }} colaborador(es) com jornada definida neste mês.
-      A apuração de horas extras e débitos só é feita depois que a jornada da competência estiver configurada.
+<div class="notice {% if configured_count == employee_count and employee_count > 0 %}success{% endif %} status-strip" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+  <div class="status-strip-copy">
+    <span class="status-symbol">{% if configured_count == employee_count and employee_count > 0 %}✓{% else %}◎{% endif %}</span>
+    <div>
+      <strong>Preparação da competência {{ month }}</strong>
+      <div class="help">
+        {{ configured_count }} de {{ employee_count }} colaborador(es) com jornada definida.
+        A apuração de extras e débitos só é feita após a jornada da competência estar configurada.
+      </div>
     </div>
   </div>
   <a class="button primary" href="/month-schedules?month={{ month }}">Configurar jornadas do mês</a>
 </div>
 {% endif %}
 
-<div class="cards">
-  <div class="card metric"><span>Horas trabalhadas</span><strong>{{ totals.worked|hm }}</strong></div>
+<div class="cards dashboard-metrics">
+  <div class="card metric">
+    <div class="metric-head"><span class="metric-icon">◷</span><span class="metric-kicker">JORNADA</span></div>
+    <span>Horas trabalhadas</span>
+    <strong>{{ totals.worked|hm }}</strong>
+    <small>Total registrado na competência</small>
+  </div>
+
   {% if settings.bank_hours_enabled == '1' %}
-  <div class="card metric"><span>Saldo banco · até 2h extras/dia</span><strong>{{ totals.bank|hm }}</strong></div>
-  <div class="card metric"><span>HE 100% · excedente acima de 2h/dia</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
+  <div class="card metric metric-accent">
+    <div class="metric-head"><span class="metric-icon">↗</span><span class="metric-kicker">BANCO</span></div>
+    <span>Saldo banco · até 2h extras/dia</span>
+    <strong>{{ totals.bank|hm }}</strong>
+    <small>Saldo acumulado no período</small>
+  </div>
+  <div class="card metric metric-alert">
+    <div class="metric-head"><span class="metric-icon">↑</span><span class="metric-kicker">100%</span></div>
+    <span>HE 100% · excedente acima de 2h/dia</span>
+    <strong>{{ totals.overtime_sunday_holiday|hm }}</strong>
+    <small>Excedentes e situações de 100%</small>
+  </div>
   {% else %}
-  <div class="card metric"><span>HE {{ settings.overtime_weekday_percent }}% · até 2h/dia</span><strong>{{ (totals.overtime_weekday + totals.overtime_saturday)|hm }}</strong></div>
-  <div class="card metric"><span>HE 100% · dom/feriado + excedente acima de 2h</span><strong>{{ totals.overtime_sunday_holiday|hm }}</strong></div>
+  <div class="card metric metric-accent">
+    <div class="metric-head"><span class="metric-icon">↗</span><span class="metric-kicker">HE {{ settings.overtime_weekday_percent }}%</span></div>
+    <span>Hora extra normal · até 2h/dia</span>
+    <strong>{{ (totals.overtime_weekday + totals.overtime_saturday)|hm }}</strong>
+    <small>Segunda a sábado</small>
+  </div>
+  <div class="card metric metric-alert">
+    <div class="metric-head"><span class="metric-icon">↑</span><span class="metric-kicker">HE 100%</span></div>
+    <span>HE 100% · dom/feriado + excedente</span>
+    <strong>{{ totals.overtime_sunday_holiday|hm }}</strong>
+    <small>Inclui excedente diário acima de 2h</small>
+  </div>
   {% endif %}
-  <div class="card metric"><span>Divergências</span><strong>{{ totals.issues }}</strong></div>
+
+  <div class="card metric metric-issues">
+    <div class="metric-head"><span class="metric-icon">!</span><span class="metric-kicker">REVISÃO</span></div>
+    <span>Divergências</span>
+    <strong>{{ totals.issues }}</strong>
+    <small>Ocorrências que exigem conferência</small>
+  </div>
 </div>
-<div class="card">
-  <div class="section-head"><div><h2>Colaboradores</h2><p>Resumo da competência {{ month }}.</p></div><a class="button ghost" href="/employees">Gerenciar</a></div>
+
+<div class="card data-panel">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow compact"><span class="eyebrow-dot"></span> EQUIPE</div>
+      <h2>Colaboradores</h2>
+      <p>Resumo individual da competência {{ month }}.</p>
+    </div>
+    <a class="button ghost" href="/employees">Gerenciar colaboradores</a>
+  </div>
   <div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Jornada do mês</th><th>Trabalhado</th>{% if settings.bank_hours_enabled == '1' %}<th>Banco até 2h/dia</th><th>HE 100% &gt; 2h/dia</th>{% else %}<th>HE {{ settings.overtime_weekday_percent }}%</th><th>HE 100%</th><th>Débitos</th>{% endif %}<th>Divergências</th><th></th></tr></thead><tbody>
   {% for s in summaries %}
   <tr>
@@ -48,10 +101,19 @@
     <td>{{ s.worked|hm }}</td>
     {% if settings.bank_hours_enabled == '1' %}<td class="positive">{{ s.bank|hm }}</td><td class="positive">{{ s.overtime_sunday_holiday|hm }}</td>{% else %}<td class="positive">{{ (s.overtime_weekday + s.overtime_saturday)|hm }}</td><td class="positive">{{ s.overtime_sunday_holiday|hm }}</td><td class="negative">{{ s.shortage|hm }}</td>{% endif %}
     <td>{% if s.issues %}<span class="badge warn">{{ s.issues }}</span>{% else %}<span class="badge ok">OK</span>{% endif %}</td>
-    <td><a href="/report/{{ s.employee.id }}?month={{ month }}">Detalhes →</a></td>
+    <td><a class="table-link" href="/report/{{ s.employee.id }}?month={{ month }}">Detalhes →</a></td>
   </tr>
   {% else %}<tr><td colspan="10" class="empty">Importe um AFD ou cadastre um colaborador.</td></tr>{% endfor %}
   </tbody></table></div>
 </div>
-{% if last_import %}<p class="footnote">Última importação: <strong>{{ last_import.original_filename }}</strong> · {{ last_import.punch_count }} batidas novas · {{ last_import.device_model or 'equipamento não identificado' }}</p>{% endif %}
+
+{% if last_import %}
+<div class="import-status">
+  <span class="status-dot"></span>
+  <span>Última importação</span>
+  <strong>{{ last_import.original_filename }}</strong>
+  <span>{{ last_import.punch_count }} batidas novas</span>
+  <span>{{ last_import.device_model or 'equipamento não identificado' }}</span>
+</div>
+{% endif %}
 {% endblock %}
