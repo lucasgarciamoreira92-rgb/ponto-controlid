@@ -9,16 +9,16 @@
 <label>Tolerância diária (minutos)<input type="number" min="0" name="daily_tolerance_minutes" value="{{ settings.daily_tolerance_minutes }}"></label>
 <label>Intervalo mínimo (minutos)<input type="number" min="0" name="min_interval_minutes" value="{{ settings.min_interval_minutes }}"></label>
 </div></div>
-<div class="card"><h2>Horas extras</h2><div class="form-grid three">
-<label>HE dias úteis (%)<input type="number" min="0" name="overtime_weekday_percent" value="{{ settings.overtime_weekday_percent }}"></label>
-<label>HE sábado (%)<input type="number" min="0" name="overtime_saturday_percent" value="{{ settings.overtime_saturday_percent }}"></label>
+<div class="card"><h2>Horas extras</h2><div class="form-grid two">
+<label>HE normal — segunda a sábado (%)<input type="number" min="0" name="overtime_weekday_percent" value="{{ settings.overtime_weekday_percent }}"></label>
+<input type="hidden" name="overtime_saturday_percent" value="{{ settings.overtime_weekday_percent }}">
 <label>HE domingo/feriado (%)<input type="number" min="0" name="overtime_sunday_holiday_percent" value="{{ settings.overtime_sunday_holiday_percent }}"></label>
 <label class="check"><input type="checkbox" name="bank_hours_enabled" {% if settings.bank_hours_enabled=='1' %}checked{% endif %}> Usar banco de horas</label>
 <label class="check"><input type="checkbox" name="consider_holidays" {% if settings.consider_holidays=='1' %}checked{% endif %}> Considerar feriados cadastrados</label>
 </div>
 <div class="notice" style="display:block;margin-top:16px;">
   <strong>Regra fixa de limite diário</strong>
-  <div class="help" style="margin-top:4px;">Até 2 horas extras por dia permanecem na faixa normal configurada acima. Todo excedente após 2 horas é classificado automaticamente como HE 100%. Se o banco de horas estiver ativo, somente até 2 horas entram no banco; o excedente continua sendo HE 100%.</div>
+  <div class="help" style="margin-top:4px;">De segunda a sábado, até 2 horas extras por dia permanecem na faixa normal configurada acima. Todo excedente após 2 horas é classificado automaticamente como HE 100%. Sem banco de horas, domingos e feriados permanecem integralmente em HE 100%. Se o banco de horas estiver ativo, somente até 2 horas entram no banco; o excedente continua sendo HE 100%.</div>
 </div>
 </div>
 <div class="card"><h2>Faixa noturna</h2><div class="form-grid three"><label class="check"><input type="checkbox" name="night_shift_enabled" {% if settings.night_shift_enabled=='1' %}checked{% endif %}> Habilitar controle noturno</label><label>Início<input type="time" name="night_start" value="{{ settings.night_start }}"></label><label>Fim<input type="time" name="night_end" value="{{ settings.night_end }}"></label></div><p class="help">Nesta primeira versão a faixa noturna fica cadastrada para evolução do cálculo; a apuração de adicional noturno não é aplicada automaticamente ainda.</p></div>
