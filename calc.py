@@ -92,8 +92,28 @@ def _saturday_standard_minutes(settings: dict) -> int | None:
     return max(0, value)
 
 
+def _expected_punch_count(day: date, schedule, is_workday: bool, saturday_standard: int | None) -> int:
+    """Quantidade mínima de marcações esperada para identificar esquecimento.
+
+    Sábado com jornada empresarial de 4h é tratado como um único período
+    (entrada + saída). Nos demais dias, a quantidade é inferida pelos períodos
+    efetivamente configurados na jornada.
+    """
+    if not is_workday or schedule is None:
+        return 0
+    if day.weekday() == 5 and saturday_standard is not None:
+        return 2
+
+    count = 0
+    if schedule["start1"] and schedule["end1"]:
+        count += 2
+    if schedule["start2"] and schedule["end2"]:
+        count += 2
+    return count
+
+
 def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, holidays: set[str]):
-    pairs, incomplete = pair_punches(punches)
+    pairs, odd_punch_count = pair_punches(punches)
     worked = worked_minutes(pairs)
     min_interval = interval_minutes(pairs)
 
@@ -109,6 +129,19 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     else:
         is_workday = bool(schedule and int(schedule["is_workday"]))
         expected = int(schedule["expected_minutes"]) if schedule and is_workday else 0
+
+    expected_punches = _expected_punch_count(day, schedule, is_workday, saturday_standard)
+    absence = bool(is_workday and not punches)
+    missing_required_punches = bool(
+        punches
+        and expected_punches > 0
+        and len(punches) < expected_punches
+    )
+    forgotten_punch = bool(
+        punches
+        and (odd_punch_count or missing_required_punches)
+    )
+    incomplete = forgotten_punch
 
     holiday = settings.get("consider_holidays", "1") == "1" and day.isoformat() in holidays
     tolerance = int(settings.get("daily_tolerance_minutes", 0) or 0)
@@ -132,8 +165,7 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     overtime_excess_100 = 0
     shortage = 0
     bank = 0
-    missing_punches = is_workday and not punches
-    review_required = incomplete or missing_punches or not schedule_configured
+    review_required = incomplete or absence or not schedule_configured
 
     if not review_required:
         if delta > 0:
@@ -172,10 +204,10 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
     status = []
     if not schedule_configured:
         status.append("Jornada não configurada")
-    if incomplete:
-        status.append("Marcação incompleta")
-    if missing_punches:
-        status.append("Sem marcação")
+    if absence:
+        status.append("Falta")
+    elif incomplete:
+        status.append("Batida incompleta")
     if settings.get("min_interval_minutes"):
         req = int(settings.get("min_interval_minutes", 0) or 0)
         if min_interval is not None and req > 0 and min_interval < req:
@@ -200,6 +232,9 @@ def analyze_day(day: date, punches: list[datetime], schedule, settings: dict, ho
         "review_required": review_required,
         "min_interval": min_interval,
         "incomplete": incomplete,
+        "forgotten_punch": forgotten_punch,
+        "absence": absence,
+        "expected_punches": expected_punches,
         "is_workday": is_workday,
         "holiday": holiday,
         "status": ", ".join(status),
