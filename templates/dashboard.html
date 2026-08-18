@@ -12,6 +12,12 @@
   </form>
 </div>
 
+{% if request.query_params.get('rep_sync_ok') is not none %}
+<div class="notice success"><strong>Relógio sincronizado.</strong> {{ request.query_params.get('rep_sync_ok','0') }} batida(s) nova(s) importada(s).</div>
+{% elif request.query_params.get('rep_sync_error') %}
+<div class="notice"><strong>Falha na sincronização do relógio:</strong> {{ request.query_params.get('rep_sync_error') }}</div>
+{% endif %}
+
 {% if closure %}
 <div class="notice success status-strip" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
   <div class="status-strip-copy">
@@ -38,6 +44,24 @@
   <a class="button primary" href="/month-schedules?month={{ month }}">Configurar jornadas do mês</a>
 </div>
 {% endif %}
+
+<div class="card" id="rep-sync-card" style="display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;">
+  <div style="display:flex;align-items:center;gap:14px;min-width:260px;">
+    <span class="status-dot" id="rep-status-dot"></span>
+    <div>
+      <div class="eyebrow compact"><span class="eyebrow-dot"></span> REP CONTROL iD</div>
+      <strong id="rep-status-title">Consultando equipamento...</strong>
+      <div class="help" id="rep-status-detail">Verificando a configuração de sincronização.</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <form method="post" action="/devices/sync-all" id="rep-sync-form">
+      <input type="hidden" name="month" value="{{ month }}">
+      <button class="button primary" type="submit">Sincronizar relógio</button>
+    </form>
+    <a class="button ghost" href="/devices" id="rep-config-link">Equipamentos</a>
+  </div>
+</div>
 
 <div class="cards dashboard-metrics">
   <div class="card metric">
@@ -115,4 +139,37 @@
   <span>{{ last_import.device_model or 'equipamento não identificado' }}</span>
 </div>
 {% endif %}
+
+<script>
+(function () {
+  const title = document.getElementById('rep-status-title');
+  const detail = document.getElementById('rep-status-detail');
+  const form = document.getElementById('rep-sync-form');
+  if (!title || !detail) return;
+
+  fetch('/devices/status', {cache: 'no-store'})
+    .then(function (response) { return response.json(); })
+    .then(function (data) {
+      if (!data.configured) {
+        title.textContent = 'Nenhum relógio configurado';
+        detail.textContent = 'Cadastre o REP para importar as marcações diretamente pela rede.';
+        if (form) form.style.display = 'none';
+        return;
+      }
+      title.textContent = data.name + (data.last_status === 'error' ? ' · atenção' : ' · conectado ao Atlas');
+      if (data.last_status === 'error' && data.last_error) {
+        detail.textContent = data.last_error;
+      } else if (data.last_success_at) {
+        const auto = data.auto_sync_minutes ? ' · automático a cada ' + data.auto_sync_minutes + ' min' : '';
+        detail.textContent = 'Última sincronização: ' + data.last_success_at + ' · NSR ' + data.last_nsr + ' · ' + data.last_new_punches + ' nova(s)' + auto;
+      } else {
+        detail.textContent = data.host + ' · ainda não sincronizado. Faça o primeiro teste em Equipamentos.';
+      }
+    })
+    .catch(function () {
+      title.textContent = 'Status do relógio indisponível';
+      detail.textContent = 'Acesse Equipamentos para testar a conexão.';
+    });
+})();
+</script>
 {% endblock %}
