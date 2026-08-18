@@ -7,8 +7,8 @@
 <div class="card"><h2>Empresa e tolerâncias</h2><div class="form-grid two">
 <label>Nome da empresa / painel<input name="company_name" value="{{ settings.company_name }}"></label>
 <label>Tolerância diária (minutos)<input type="number" min="0" name="daily_tolerance_minutes" value="{{ settings.daily_tolerance_minutes }}"></label>
-<label>Intervalo mínimo (minutos)<input type="number" min="0" name="min_interval_minutes" value="{{ settings.min_interval_minutes }}"></label>
-</div></div>
+<label>Alertar intervalo menor que (minutos)<input type="number" min="0" name="min_interval_minutes" value="{{ settings.min_interval_minutes }}"></label>
+</div><p class="help" style="margin-top:12px;">Com a regra atual em 30 minutos, intervalos de 30 minutos ou mais não geram alerta. Apenas intervalos abaixo de 30 minutos aparecem como divergência.</p></div>
 <div class="card"><h2>Horas extras</h2><div class="form-grid two">
 <label>HE normal — segunda a sábado (%)<input type="number" min="0" name="overtime_weekday_percent" value="{{ settings.overtime_weekday_percent }}"></label>
 <input type="hidden" name="overtime_saturday_percent" value="{{ settings.overtime_weekday_percent }}">
