@@ -22,11 +22,17 @@ app_module.UPLOAD_DIR = UPLOAD_DIR
 app_auto_module.CLOSED_REPORTS_DIR = CLOSED_REPORTS_DIR
 controlid_sync_module.UPLOAD_DIR = UPLOAD_DIR
 
+# Competências abertas nunca classificam datas futuras como falta.
+import month_runtime_guard  # noqa: F401,E402
+
 # Registra as rotas e o sincronizador do REP Control iD.
 import controlid_routes  # noqa: F401,E402
 
 # Registra backup e restauração completos da base do Atlas Ponto.
 import backup_routes  # noqa: F401,E402
+
+# Permite desfazer um fechamento feito por engano, com backup preventivo.
+import closure_admin  # noqa: F401,E402
 
 
 if __name__ == "__main__":
