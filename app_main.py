@@ -25,6 +25,9 @@ controlid_sync_module.UPLOAD_DIR = UPLOAD_DIR
 # Competências abertas nunca classificam datas futuras como falta.
 import month_runtime_guard  # noqa: F401,E402
 
+# Registra a prévia consolidada de todos os colaboradores antes do fechamento.
+import monthly_preview  # noqa: F401,E402
+
 # Registra as rotas e o sincronizador do REP Control iD.
 import controlid_routes  # noqa: F401,E402
 
