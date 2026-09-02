@@ -35,11 +35,12 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller==6.21.0
 
-      - name: Smoke test application backup and restore
+      - name: Smoke test application backup restore and PDF preview
         shell: pwsh
         run: |
-          python -m py_compile app_paths.py db.py backup_restore.py backup_routes.py app_main.py
+          python -m py_compile app_paths.py db.py backup_restore.py backup_routes.py month_runtime_guard.py closure_admin.py monthly_preview.py app_main.py
           python -c "import app_main; from backup_restore import create_backup_archive, inspect_backup_archive, restore_backup_archive; p=create_backup_archive('CI_Backup'); info=inspect_backup_archive(p); assert info['counts']['employees'] >= 0; result=restore_backup_archive(p); assert result['restored'] is True; print('Backup/restore smoke test OK:', p)"
+          python -c "from monthly_preview import build_monthly_preview_pdf; report={'employee':{'name':'Colaborador Teste'},'days':[],'totals':{'worked':0,'overtime_weekday':0,'overtime_saturday':0,'overtime_sunday_holiday':0,'shortage':0,'bank':0},'absence_count':0,'forgotten_count':0}; settings={'company_name':'Atlas Teste','bank_hours_enabled':'0','overtime_weekday_percent':'50'}; pdf=build_monthly_preview_pdf('2026-08',settings,[report]); assert pdf[:4]==b'%PDF'; assert len(pdf)>1000; print('PDF preview smoke test OK:', len(pdf))"
 
       - name: Build Atlas Ponto application
         shell: pwsh
