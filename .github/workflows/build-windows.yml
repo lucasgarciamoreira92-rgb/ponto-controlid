@@ -48,6 +48,35 @@ jobs:
           pyinstaller --noconfirm --clean AtlasPonto.spec
           if (!(Test-Path "dist\AtlasPonto\AtlasPonto.exe")) { throw "AtlasPonto.exe não foi gerado" }
 
+      - name: Run packaged Windows application
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path "dist\AtlasPonto\AtlasPonto.exe"
+          $proc = Start-Process -FilePath $exe -PassThru
+          $ok = $false
+          try {
+            for ($i = 0; $i -lt 40; $i++) {
+              Start-Sleep -Milliseconds 500
+              try {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:8000/health" -UseBasicParsing -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ok = $true; break }
+              } catch {}
+              if ($proc.HasExited) { break }
+            }
+            if (-not $ok) {
+              $log = Join-Path $env:LOCALAPPDATA "Atlas Ponto\data\atlas_ponto.log"
+              if (Test-Path $log) {
+                Write-Host "----- atlas_ponto.log -----"
+                Get-Content $log
+                Write-Host "---------------------------"
+              }
+              throw "O executável empacotado não respondeu em /health"
+            }
+            Write-Host "Packaged executable smoke test OK"
+          } finally {
+            if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+          }
+
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
