@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 from app import _month_closure, app, connect
 from app_paths import CLOSED_REPORTS_DIR, CODE_DIR
-from backup_restore import BackupError, create_backup_archive
+from backup_restore import create_backup_archive
 
 
 def _validate_month(month: str) -> str:
@@ -61,12 +60,12 @@ async def cancel_closed_competence(month: str, request: Request):
             )
 
     # Antes de desfazer o fechamento, cria uma cópia completa da situação atual.
-    # Se algo inesperado acontecer, o usuário ainda possui o estado anterior.
+    # Se algo inesperado acontecer, o fechamento permanece intacto.
     try:
         safety_backup = create_backup_archive(
             prefix=f"AtlasPonto_Antes_Cancelar_{month.replace('-', '_')}"
         )
-    except BackupError:
+    except Exception:
         return RedirectResponse(
             f"/month-schedules?month={month}&cancel_error=backup",
             status_code=303,
