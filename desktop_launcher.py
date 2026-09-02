@@ -55,12 +55,18 @@ def main() -> None:
         import uvicorn
         from app_main import app
 
+        # Em um executável Windows sem console, sys.stdout/sys.stderr podem ser
+        # None. O log_config padrão do Uvicorn tenta consultar isatty() nesses
+        # streams e derruba a aplicação antes de o servidor iniciar. O Atlas já
+        # possui logging próprio em arquivo, então desativamos apenas a
+        # configuração de console do Uvicorn.
         uvicorn.run(
             app,
             host=HOST,
             port=PORT,
             reload=False,
             log_level="warning",
+            log_config=None,
             access_log=False,
         )
     except Exception:
