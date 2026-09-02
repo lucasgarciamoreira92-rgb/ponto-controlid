@@ -13,15 +13,33 @@
   </div>
 </div>
 
+{% if request.query_params.get('closure_cancelled') %}
+<div class="notice success" style="display:block;">
+  <strong>Fechamento de {{ month }} cancelado com sucesso.</strong>
+  <div class="help" style="margin-top:4px;">A competência voltou a ficar aberta. Batidas, colaboradores e jornadas foram preservados. Antes do cancelamento o Atlas criou automaticamente o backup de segurança <strong>{{ request.query_params.get('safety_backup','') }}</strong>.</div>
+</div>
+{% endif %}
+{% if request.query_params.get('cancel_error') == 'confirmation' %}
+<div class="notice">Cancelamento não realizado: a confirmação da competência não corresponde a {{ month }}.</div>
+{% elif request.query_params.get('cancel_error') == 'not_closed' %}
+<div class="notice">Esta competência já está aberta; não existe fechamento para cancelar.</div>
+{% elif request.query_params.get('cancel_error') == 'backup' %}
+<div class="notice">O fechamento não foi alterado porque o Atlas não conseguiu criar o backup preventivo. Nenhum dado foi modificado.</div>
+{% endif %}
+
 {% if closure %}
 <div class="notice success" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
   <div>
     <strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong>
     <div class="help" style="margin-top:4px;">Fechada em {{ closure.finalized_at }}. Jornadas, regras, feriados e o conjunto de batidas considerado nesta competência estão congelados.</div>
   </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap;">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
     <a class="button primary" href="/closures/{{ month }}/pdf">Baixar PDF completo</a>
     <a class="button ghost" href="/closures">Competências fechadas</a>
+    <form method="post" action="/closures/{{ month }}/cancel" style="margin:0;" onsubmit="var typed=prompt('Para cancelar o fechamento, digite exatamente {{ month }}'); if (typed !== '{{ month }}') { alert('Cancelamento não realizado.'); return false; } this.querySelector('[name=confirm_month]').value=typed; return confirm('Cancelar o fechamento de {{ month }}? A competência voltará a ficar aberta. Batidas e jornadas serão preservadas e um backup será criado antes da alteração.');">
+      <input type="hidden" name="confirm_month" value="">
+      <button class="button ghost" type="submit" style="border-color:#c85b52;color:#a53b34;">Cancelar fechamento</button>
+    </form>
   </div>
 </div>
 {% elif request.query_params.get('finalized') %}
@@ -103,7 +121,7 @@
       <h2>Finalizar competência</h2>
       <p>Use somente depois de conferir jornadas, batidas e divergências. Após a finalização, a competência ficará bloqueada para alterações.</p>
     </div>
-    <form method="post" action="/month-schedules/finalize" onsubmit="return confirm('Finalizar a competência {{ month }}? Depois disso ela ficará somente para leitura e não poderá ser alterada pela interface.');">
+    <form method="post" action="/month-schedules/finalize" onsubmit="var now=new Date(); var current=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'); var message='Finalizar a competência {{ month }}? Depois disso ela ficará somente para leitura.'; if ('{{ month }}'===current) { message='ATENÇÃO: {{ month }} é a competência do mês atual. Confira se você realmente quer fechar o mês corrente e não o mês anterior.\n\n'+message; } return confirm(message);">
       <input type="hidden" name="month" value="{{ month }}">
       <button class="button primary" type="submit">Finalizar competência {{ month }}</button>
     </form>
