@@ -9,7 +9,7 @@
   </div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
     <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Alterar mês</button></form>
-    {% if not closure %}<a class="button primary" href="/month-schedules/preview.pdf?month={{ month }}" target="_blank" rel="noopener">Prévia geral PDF</a>{% endif %}
+    {% if not closure %}<a class="button primary" href="/reports/monthly-preview.pdf?month={{ month }}" target="_blank" rel="noopener">Prévia geral PDF</a>{% endif %}
     <a class="button ghost" href="/?month={{ month }}">Voltar ao Dashboard</a>
   </div>
 </div>
