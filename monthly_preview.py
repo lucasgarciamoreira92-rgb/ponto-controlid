@@ -3,7 +3,6 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Optional
 
-from fastapi import HTTPException
 from fastapi.responses import RedirectResponse, Response
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -171,7 +170,7 @@ def build_monthly_preview_pdf(
     return buffer.getvalue()
 
 
-@app.get("/month-schedules/preview.pdf", include_in_schema=False)
+@app.get("/reports/monthly-preview.pdf", include_in_schema=False)
 def monthly_general_preview(month: Optional[str] = None):
     month_value = _month_value(month)
 
