@@ -9,6 +9,7 @@
   </div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
     <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Alterar mês</button></form>
+    {% if not closure %}<a class="button primary" href="/month-schedules/preview.pdf?month={{ month }}" target="_blank" rel="noopener">Prévia geral PDF</a>{% endif %}
     <a class="button ghost" href="/?month={{ month }}">Voltar ao Dashboard</a>
   </div>
 </div>
@@ -53,6 +54,11 @@
 <div class="notice">
   <strong>Não foi possível finalizar: {{ request.query_params.get('missing','0') }} colaborador(es) com batidas ainda estão sem jornada definida nesta competência.</strong>
   <div class="help" style="margin-top:6px;">O(s) colaborador(es) que estão bloqueando o fechamento aparecem destacados na lista abaixo. Isso pode incluir alguém que hoje esteja inativo, mas que possui batidas dentro de {{ month }}.</div>
+</div>
+{% elif request.query_params.get('error') == 'preview_missing' %}
+<div class="notice">
+  <strong>A prévia geral ainda não pode ser gerada: {{ request.query_params.get('missing','0') }} colaborador(es) da competência estão sem jornada mensal configurada.</strong>
+  <div class="help" style="margin-top:6px;">Configure os colaboradores destacados abaixo para que a prévia consolidada tenha os mesmos critérios de cálculo para toda a equipe.</div>
 </div>
 {% elif request.query_params.get('error') == 'future' %}
 <div class="notice">Uma competência futura não pode ser finalizada.</div>
@@ -119,7 +125,7 @@
   <div class="section-head">
     <div>
       <h2>Finalizar competência</h2>
-      <p>Use somente depois de conferir jornadas, batidas e divergências. Após a finalização, a competência ficará bloqueada para alterações.</p>
+      <p>Antes de fechar, use <strong>Prévia geral PDF</strong> no topo para conferir todos os colaboradores em um único documento. Após a finalização, a competência ficará bloqueada para alterações.</p>
     </div>
     <form method="post" action="/month-schedules/finalize" onsubmit="var now=new Date(); var current=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'); var message='Finalizar a competência {{ month }}? Depois disso ela ficará somente para leitura.'; if ('{{ month }}'===current) { message='ATENÇÃO: {{ month }} é a competência do mês atual. Confira se você realmente quer fechar o mês corrente e não o mês anterior.\n\n'+message; } return confirm(message);">
       <input type="hidden" name="month" value="{{ month }}">
