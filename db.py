@@ -1,19 +1,43 @@
 from __future__ import annotations
 import sqlite3
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 
-BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "data" / "ponto.db"
+from app_paths import DB_PATH
+
+
+# O aplicativo é local e o SQLite é pequeno. Serializar o acesso deixa backup e
+# restauração seguros inclusive quando a sincronização automática do REP estiver
+# ativa em outra thread.
+DB_LOCK = threading.RLock()
 
 DEFAULT_SETTINGS = {
     "company_name": "Controle de Ponto",
+    # Mantida somente para preservar o cálculo de competências antigas que já
+    # foram finalizadas com a lógica legada de tolerância sobre o saldo diário.
     "daily_tolerance_minutes": "10",
+    # Regra vigente para competências abertas e futuras: art. 58, §1º, CLT.
+    # A tolerância é aplicada às marcações do ponto, não ao saldo final do dia.
+    "tolerance_rule_version": "clt_marking_v1",
+    "marking_tolerance_minutes": "5",
+    "daily_marking_tolerance_minutes": "10",
     "overtime_weekday_percent": "50",
     "overtime_saturday_percent": "50",
     "overtime_sunday_holiday_percent": "100",
+    # Regra vigente para novas competências: sábado possui jornada normal
+    # empresarial de 4 horas. O que exceder 4h entra na apuração de HE:
+    # até 2h extras na faixa normal e o excedente em HE 100%.
+    # A chave também entra no snapshot ao finalizar a competência.
+    "saturday_standard_minutes": "240",
+    # Regra fixa vigente para novas competências: até 2h extras/dia na faixa
+    # normal; excedente acima de 120 minutos classificado em HE 100%.
+    # Esses campos entram no snapshot da competência quando ela é finalizada.
+    "overtime_daily_limit_minutes": "120",
+    "overtime_excess_percent": "100",
     "bank_hours_enabled": "0",
-    "min_interval_minutes": "60",
+    # Alerta operacional: só sinaliza intervalo quando for MENOR que 30 min.
+    "min_interval_minutes": "30",
     "night_shift_enabled": "0",
     "night_start": "22:00",
     "night_end": "05:00",
@@ -44,6 +68,31 @@ CREATE TABLE IF NOT EXISTS schedules (
     expected_minutes INTEGER NOT NULL DEFAULT 0,
     UNIQUE(employee_id, weekday),
     FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS monthly_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    employee_id INTEGER NOT NULL,
+    month TEXT NOT NULL,
+    weekday INTEGER NOT NULL CHECK (weekday BETWEEN 0 AND 6),
+    is_workday INTEGER NOT NULL DEFAULT 0,
+    start1 TEXT,
+    end1 TEXT,
+    start2 TEXT,
+    end2 TEXT,
+    expected_minutes INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(employee_id, month, weekday),
+    FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS month_closures (
+    month TEXT PRIMARY KEY,
+    finalized_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    punch_cutoff_id INTEGER NOT NULL DEFAULT 0,
+    settings_json TEXT NOT NULL,
+    holidays_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -87,27 +136,40 @@ CREATE TABLE IF NOT EXISTS punches (
 
 CREATE INDEX IF NOT EXISTS idx_punches_employee_date ON punches(employee_id, punched_at);
 CREATE INDEX IF NOT EXISTS idx_punches_external_date ON punches(external_id, punched_at);
+CREATE INDEX IF NOT EXISTS idx_monthly_schedules_employee_month ON monthly_schedules(employee_id, month);
 '''
+
 
 @contextmanager
 def connect(db_path: Path | str | None = None):
     path = Path(db_path) if db_path else DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    try:
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    with DB_LOCK:
+        conn = sqlite3.connect(path)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def init_db(db_path: Path | str | None = None):
     with connect(db_path) as conn:
         conn.executescript(SCHEMA)
+        closure_columns = {row["name"] for row in conn.execute("PRAGMA table_info(month_closures)").fetchall()}
+        if "punch_cutoff_id" not in closure_columns:
+            conn.execute("ALTER TABLE month_closures ADD COLUMN punch_cutoff_id INTEGER NOT NULL DEFAULT 0")
         for key, value in DEFAULT_SETTINGS.items():
             conn.execute("INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (key, value))
+
+        # Migração da configuração antiga padrão (60 min) para a nova regra
+        # empresarial: alertar apenas quando o intervalo for menor que 30 min.
+        # Valores customizados diferentes de 60 são preservados.
+        conn.execute(
+            "UPDATE settings SET value='30' WHERE key='min_interval_minutes' AND value='60'"
+        )
 
 
 def get_settings(conn):

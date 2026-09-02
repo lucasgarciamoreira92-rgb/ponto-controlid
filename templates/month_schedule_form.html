@@ -1,27 +1,45 @@
 {% extends "base.html" %}
-{% block title %}{% if employee %}Editar{% else %}Novo{% endif %} colaborador{% endblock %}
+{% block title %}Jornada {{ month }} | {{ employee.name }}{% endblock %}
 {% block content %}
-<div class="topbar"><div><h1>{% if employee %}{{ employee.name }}{% else %}Novo colaborador{% endif %}</h1><p>Cadastro e jornada padrão do colaborador.</p></div><a class="button ghost" href="/employees">Voltar</a></div>
-{% if request.query_params.get('saved') %}<div class="notice success">Alterações salvas.</div>{% endif %}
-<form method="post" action="/employees/save" id="employee-form">
-<input type="hidden" name="employee_id" value="{{ employee.id if employee else '' }}">
-<div class="card form-grid">
-  <label>Nome completo<input name="name" required value="{{ employee.name if employee else '' }}"></label>
-  <label>Identificador no AFD<input name="external_id" value="{{ employee.external_id if employee else '' }}" placeholder="Ex.: 002546123009"></label>
-  <label class="check"><input type="checkbox" name="active" {% if not employee or employee.active %}checked{% endif %}> Colaborador ativo</label>
+<div class="topbar">
+  <div>
+    <h1>{{ employee.name }}</h1>
+    <p>Jornada usada exclusivamente na competência {{ month }}.</p>
+  </div>
+  <a class="button ghost" href="/month-schedules?month={{ month }}">Voltar</a>
 </div>
+
+{% if closure %}
+<div class="notice success"><strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong><div class="help" style="margin-top:4px;">Esta jornada não pode mais ser alterada pela interface.</div></div>
+{% elif request.query_params.get('locked') %}
+<div class="notice">Esta competência já está finalizada e não aceita alterações.</div>
+{% elif request.query_params.get('saved') %}
+<div class="notice success">Jornada da competência {{ month }} salva.</div>
+{% endif %}
+
+{% if not closure %}
+  {% if source == 'default' %}
+  <div class="notice">Os campos abaixo foram pré-preenchidos com a jornada padrão do colaborador. Salve para fixar essa jornada em {{ month }}.</div>
+  {% elif source == 'empty' %}
+  <div class="notice">Este colaborador ainda não possui jornada padrão. Defina a jornada diretamente para {{ month }}.</div>
+  {% endif %}
+{% endif %}
+
+<form method="post" action="/month-schedules/{{ employee.id }}/save" id="month-schedule-form">
+<input type="hidden" name="month" value="{{ month }}">
 <div class="card">
   <div class="section-head">
     <div>
-      <h2>Jornada padrão</h2>
-      <p>Esta jornada funciona como modelo para novas competências. A apuração mensal usa a jornada que for confirmada no botão “Configurar jornadas do mês” do Dashboard.</p>
+      <h2>Jornada da competência {{ month }}</h2>
+      <p>{% if closure %}Jornada congelada no fechamento desta competência.{% else %}Depois de salva, esta jornada fica independente da jornada padrão e poderá ser ajustada até a finalização do mês.{% endif %}</p>
     </div>
   </div>
 
+  {% if not closure %}
   <div class="notice" style="display:block;">
     <div style="margin-bottom:14px;">
       <strong>Preenchimento rápido — Segunda a sábado</strong>
-      <div class="help" style="margin-top:4px;">Informe a jornada uma única vez. A carga diária é mostrada no formato horas:minutos, por exemplo 08:30. Ao aplicar, o sistema preenche segunda a sábado. Domingo permanece independente.</div>
+      <div class="help" style="margin-top:4px;">Informe a jornada uma única vez. A carga diária é mostrada como horas:minutos, por exemplo 08:30. Depois você pode editar qualquer dia individualmente.</div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:10px;align-items:end;">
       <label>Entrada 1<input type="time" id="quick-start1"></label>
@@ -31,33 +49,35 @@
       <label>Carga diária (HH:MM)<input type="text" id="quick-duration" inputmode="numeric" placeholder="08:30" pattern="[0-9]{1,2}:[0-5][0-9]"></label>
     </div>
     <div style="display:flex;justify-content:flex-end;margin-top:14px;">
-      <button class="button primary" type="button" id="apply-weekdays">Aplicar e salvar segunda–sábado</button>
+      <button class="button primary" type="button" id="apply-month-weekdays">Aplicar e salvar segunda–sábado</button>
     </div>
   </div>
+  {% endif %}
 
   <div class="schedule-scroll">
     <div class="schedule-grid header"><span>Dia</span><span>Trabalha</span><span>Entrada 1</span><span>Saída 1</span><span>Entrada 2</span><span>Saída 2</span><span>Carga diária</span></div>
     {% for wd,label in weekdays %}{% set s=schedules.get(wd) %}
     <div class="schedule-grid">
       <strong>{{ label }}</strong>
-      <label class="switch"><input type="checkbox" name="d{{wd}}_active" {% if s and s.is_workday %}checked{% endif %}><span></span></label>
-      <input type="time" name="d{{wd}}_start1" value="{{ s.start1 if s and s.start1 else '' }}">
-      <input type="time" name="d{{wd}}_end1" value="{{ s.end1 if s and s.end1 else '' }}">
-      <input type="time" name="d{{wd}}_start2" value="{{ s.start2 if s and s.start2 else '' }}">
-      <input type="time" name="d{{wd}}_end2" value="{{ s.end2 if s and s.end2 else '' }}">
-      <input type="text" class="duration-display" data-hours-target="d{{wd}}_hours" inputmode="numeric" placeholder="08:30" pattern="[0-9]{1,2}:[0-5][0-9]" value="{{ (s.expected_minutes or 0)|hm if s and s.is_workday else '' }}">
+      <label class="switch"><input type="checkbox" name="d{{wd}}_active" {% if s and s.is_workday %}checked{% endif %} {% if closure %}disabled{% endif %}><span></span></label>
+      <input type="time" name="d{{wd}}_start1" value="{{ s.start1 if s and s.start1 else '' }}" {% if closure %}disabled{% endif %}>
+      <input type="time" name="d{{wd}}_end1" value="{{ s.end1 if s and s.end1 else '' }}" {% if closure %}disabled{% endif %}>
+      <input type="time" name="d{{wd}}_start2" value="{{ s.start2 if s and s.start2 else '' }}" {% if closure %}disabled{% endif %}>
+      <input type="time" name="d{{wd}}_end2" value="{{ s.end2 if s and s.end2 else '' }}" {% if closure %}disabled{% endif %}>
+      <input type="text" class="duration-display" data-hours-target="d{{wd}}_hours" inputmode="numeric" placeholder="08:30" pattern="[0-9]{1,2}:[0-5][0-9]" value="{{ (s.expected_minutes or 0)|hm if s and s.is_workday else '' }}" {% if closure %}disabled{% endif %}>
       <input type="hidden" name="d{{wd}}_hours" id="d{{wd}}_hours" value="{{ '%.6f'|format((s.expected_minutes or 0)/60) if s else '' }}">
     </div>
     {% endfor %}
   </div>
 </div>
-<div class="savebar"><button class="button primary" type="submit">Salvar colaborador e jornada padrão</button></div>
+{% if not closure %}<div class="savebar"><button class="button primary" type="submit">Salvar jornada de {{ month }}</button></div>{% endif %}
 </form>
 
+{% if not closure %}
 <script>
 (function () {
-  const button = document.getElementById('apply-weekdays');
-  const form = document.getElementById('employee-form');
+  const button = document.getElementById('apply-month-weekdays');
+  const form = document.getElementById('month-schedule-form');
   if (!button || !form) return;
 
   function clockMinutes(value) {
@@ -133,4 +153,5 @@
   });
 })();
 </script>
+{% endif %}
 {% endblock %}

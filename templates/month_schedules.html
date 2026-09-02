@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Jornadas do mês | Ponto{% endblock %}
+{% block content %}
+{% set missing_ids = request.query_params.get('missing_ids','').split(',') %}
+<div class="topbar">
+  <div>
+    <h1>Jornadas da competência</h1>
+    <p>Defina qual jornada será usada na apuração de {{ month }}.</p>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+    <form method="get" class="month-form"><input type="month" name="month" value="{{ month }}"><button>Alterar mês</button></form>
+    {% if not closure %}<a class="button primary" href="/reports/monthly-preview.pdf?month={{ month }}" target="_blank" rel="noopener">Prévia geral PDF</a>{% endif %}
+    <a class="button ghost" href="/?month={{ month }}">Voltar ao Dashboard</a>
+  </div>
+</div>
+
+{% if request.query_params.get('closure_cancelled') %}
+<div class="notice success" style="display:block;">
+  <strong>Fechamento de {{ month }} cancelado com sucesso.</strong>
+  <div class="help" style="margin-top:4px;">A competência voltou a ficar aberta. Batidas, colaboradores e jornadas foram preservados. Antes do cancelamento o Atlas criou automaticamente o backup de segurança <strong>{{ request.query_params.get('safety_backup','') }}</strong>.</div>
+</div>
+{% endif %}
+{% if request.query_params.get('cancel_error') == 'confirmation' %}
+<div class="notice">Cancelamento não realizado: a confirmação da competência não corresponde a {{ month }}.</div>
+{% elif request.query_params.get('cancel_error') == 'not_closed' %}
+<div class="notice">Esta competência já está aberta; não existe fechamento para cancelar.</div>
+{% elif request.query_params.get('cancel_error') == 'backup' %}
+<div class="notice">O fechamento não foi alterado porque o Atlas não conseguiu criar o backup preventivo. Nenhum dado foi modificado.</div>
+{% endif %}
+
+{% if closure %}
+<div class="notice success" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+  <div>
+    <strong>Competência {{ month }} FINALIZADA · SOMENTE LEITURA</strong>
+    <div class="help" style="margin-top:4px;">Fechada em {{ closure.finalized_at }}. Jornadas, regras, feriados e o conjunto de batidas considerado nesta competência estão congelados.</div>
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <a class="button primary" href="/closures/{{ month }}/pdf">Baixar PDF completo</a>
+    <a class="button ghost" href="/closures">Competências fechadas</a>
+    <form method="post" action="/closures/{{ month }}/cancel" style="margin:0;" onsubmit="var typed=prompt('Para cancelar o fechamento, digite exatamente {{ month }}'); if (typed !== '{{ month }}') { alert('Cancelamento não realizado.'); return false; } this.querySelector('[name=confirm_month]').value=typed; return confirm('Cancelar o fechamento de {{ month }}? A competência voltará a ficar aberta. Batidas e jornadas serão preservadas e um backup será criado antes da alteração.');">
+      <input type="hidden" name="confirm_month" value="">
+      <button class="button ghost" type="submit" style="border-color:#c85b52;color:#a53b34;">Cancelar fechamento</button>
+    </form>
+  </div>
+</div>
+{% elif request.query_params.get('finalized') %}
+<div class="notice success"><strong>Competência {{ month }} finalizada com sucesso.</strong></div>
+{% endif %}
+
+{% if request.query_params.get('locked') %}
+<div class="notice">Esta competência já está finalizada e não aceita alterações.</div>
+{% endif %}
+{% if request.query_params.get('error') == 'missing' %}
+<div class="notice">
+  <strong>Não foi possível finalizar: {{ request.query_params.get('missing','0') }} colaborador(es) com batidas ainda estão sem jornada definida nesta competência.</strong>
+  <div class="help" style="margin-top:6px;">O(s) colaborador(es) que estão bloqueando o fechamento aparecem destacados na lista abaixo. Isso pode incluir alguém que hoje esteja inativo, mas que possui batidas dentro de {{ month }}.</div>
+</div>
+{% elif request.query_params.get('error') == 'preview_missing' %}
+<div class="notice">
+  <strong>A prévia geral ainda não pode ser gerada: {{ request.query_params.get('missing','0') }} colaborador(es) da competência estão sem jornada mensal configurada.</strong>
+  <div class="help" style="margin-top:6px;">Configure os colaboradores destacados abaixo para que a prévia consolidada tenha os mesmos critérios de cálculo para toda a equipe.</div>
+</div>
+{% elif request.query_params.get('error') == 'future' %}
+<div class="notice">Uma competência futura não pode ser finalizada.</div>
+{% endif %}
+{% if request.query_params.get('copied') %}
+<div class="notice success">
+  Jornadas padrão aplicadas a {{ request.query_params.get('copied','0') }} colaborador(es).
+  {{ request.query_params.get('skipped','0') }} já estavam configurados ou ainda não possuem jornada padrão.
+</div>
+{% endif %}
+
+{% if not closure %}
+<div class="card">
+  <div class="section-head">
+    <div>
+      <h2>Preenchimento rápido da competência</h2>
+      <p>Copia a jornada padrão de cada colaborador para {{ month }} somente quando a competência ainda não estiver configurada.</p>
+    </div>
+    <form method="post" action="/month-schedules/copy-defaults">
+      <input type="hidden" name="month" value="{{ month }}">
+      <button class="button primary" type="submit">Aplicar jornadas padrão ao mês</button>
+    </form>
+  </div>
+  <p class="footnote">Esse botão não sobrescreve jornadas mensais já salvas e também considera quem possui batidas na competência, mesmo que esteja inativo atualmente.</p>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="section-head"><div><h2>Colaboradores</h2><p>{% if closure %}Consulta da jornada congelada em {{ month }}.{% else %}Depois de configurada, a jornada de {{ month }} fica independente da jornada padrão.{% endif %}</p></div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Colaborador</th><th>Jornada padrão</th><th>Competência {{ month }}</th><th></th></tr></thead>
+      <tbody>
+      {% for employee in employees %}
+      {% set blocks_closure = (employee.id|string) in missing_ids %}
+      <tr class="{% if blocks_closure %}row-warn{% endif %}">
+        <td>
+          <strong>{{ employee.name }}</strong>
+          <small>{{ employee.external_id or 'sem identificador AFD' }}</small>
+          {% if not employee.active %}<small style="margin-top:4px;">Inativo atualmente · possui histórico nesta competência</small>{% endif %}
+        </td>
+        <td>{% if employee.has_default_schedule %}<span class="badge ok">Disponível</span>{% else %}<span class="badge warn">Não cadastrada</span>{% endif %}</td>
+        <td>
+          {% if employee.has_month_schedule %}
+            <span class="badge ok">Configurada</span>
+          {% elif blocks_closure %}
+            <span class="badge warn">Pendente · bloqueia fechamento</span>
+          {% else %}
+            <span class="badge warn">Pendente</span>
+          {% endif %}
+        </td>
+        <td><a class="button ghost" href="/month-schedules/{{ employee.id }}?month={{ month }}">{% if closure %}Visualizar{% elif employee.has_month_schedule %}Editar jornada do mês{% else %}Configurar jornada{% endif %}</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">Nenhum colaborador nesta competência.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if not closure %}
+<div class="card" style="border-color:#e8b4ae;">
+  <div class="section-head">
+    <div>
+      <h2>Finalizar competência</h2>
+      <p>Antes de fechar, use <strong>Prévia geral PDF</strong> no topo para conferir todos os colaboradores em um único documento. Após a finalização, a competência ficará bloqueada para alterações.</p>
+    </div>
+    <form method="post" action="/month-schedules/finalize" onsubmit="var now=new Date(); var current=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0'); var message='Finalizar a competência {{ month }}? Depois disso ela ficará somente para leitura.'; if ('{{ month }}'===current) { message='ATENÇÃO: {{ month }} é a competência do mês atual. Confira se você realmente quer fechar o mês corrente e não o mês anterior.\n\n'+message; } return confirm(message);">
+      <input type="hidden" name="month" value="{{ month }}">
+      <button class="button primary" type="submit">Finalizar competência {{ month }}</button>
+    </form>
+  </div>
+  <p class="footnote">O fechamento congela a jornada mensal, as regras de cálculo, os feriados e o conjunto de batidas já importado. Novas importações de AFD não alteram silenciosamente uma competência fechada.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,23 +1,72 @@
 {% extends "base.html" %}
 {% block title %}Configurações{% endblock %}
 {% block content %}
-<div class="topbar"><div><h1>Configurações</h1><p>Regras de apuração editáveis, sem deixar o cálculo engessado.</p></div></div>
+<div class="topbar"><div><h1>Configurações</h1><p>Regras de apuração, segurança da base e continuidade operacional.</p></div></div>
 {% if request.query_params.get('saved') %}<div class="notice success">Configurações salvas.</div>{% endif %}
+{% if request.query_params.get('restored') %}
+<div class="notice success" style="display:block;">
+  <strong>Backup restaurado com sucesso.</strong>
+  <div class="help" style="margin-top:4px;">A base, os AFDs armazenados e os documentos arquivados foram restaurados. Antes da troca o Atlas criou automaticamente uma cópia de segurança da base que estava nesta máquina{% if request.query_params.get('safety') %}: <code>{{ request.query_params.get('safety') }}</code>{% endif %}.</div>
+</div>
+{% endif %}
+{% if request.query_params.get('backup_error') %}<div class="notice warn"><strong>Restauração não realizada.</strong><div class="help" style="margin-top:4px;">{{ request.query_params.get('backup_error') }}</div></div>{% endif %}
 <form method="post">
-<div class="card"><h2>Empresa e tolerâncias</h2><div class="form-grid two">
+<div class="card"><h2>Empresa e regras de marcação</h2><div class="form-grid two">
 <label>Nome da empresa / painel<input name="company_name" value="{{ settings.company_name }}"></label>
-<label>Tolerância diária (minutos)<input type="number" min="0" name="daily_tolerance_minutes" value="{{ settings.daily_tolerance_minutes }}"></label>
-<label>Intervalo mínimo (minutos)<input type="number" min="0" name="min_interval_minutes" value="{{ settings.min_interval_minutes }}"></label>
-</div></div>
-<div class="card"><h2>Horas extras</h2><div class="form-grid three">
-<label>HE dias úteis (%)<input type="number" min="0" name="overtime_weekday_percent" value="{{ settings.overtime_weekday_percent }}"></label>
-<label>HE sábado (%)<input type="number" min="0" name="overtime_saturday_percent" value="{{ settings.overtime_saturday_percent }}"></label>
+<label>Alertar intervalo menor que (minutos)<input type="number" min="0" name="min_interval_minutes" value="{{ settings.min_interval_minutes }}"></label>
+</div>
+<input type="hidden" name="daily_tolerance_minutes" value="{{ settings.daily_tolerance_minutes }}">
+<div class="notice success" style="display:block;margin-top:16px;">
+  <strong>Tolerância legal de marcação — CLT, art. 58, §1º</strong>
+  <div class="help" style="margin-top:4px;">Aplicada automaticamente pelo sistema: até 5 minutos de variação por registro, observado o limite máximo de 10 minutos no dia. A tolerância é aplicada às marcações do ponto, e não ao saldo final diário. Se qualquer marcação ultrapassar 5 minutos ou se a soma das variações do dia ultrapassar 10 minutos, as marcações reais são usadas integralmente no cálculo. O AFD original nunca é alterado.</div>
+</div>
+<p class="help" style="margin-top:12px;">Com a regra atual de intervalo em 30 minutos, intervalos de 30 minutos ou mais não geram alerta. Apenas intervalos abaixo de 30 minutos aparecem como divergência.</p></div>
+<div class="card"><h2>Horas extras</h2><div class="form-grid two">
+<label>HE normal — segunda a sábado (%)<input type="number" min="0" name="overtime_weekday_percent" value="{{ settings.overtime_weekday_percent }}"></label>
+<input type="hidden" name="overtime_saturday_percent" value="{{ settings.overtime_weekday_percent }}">
 <label>HE domingo/feriado (%)<input type="number" min="0" name="overtime_sunday_holiday_percent" value="{{ settings.overtime_sunday_holiday_percent }}"></label>
 <label class="check"><input type="checkbox" name="bank_hours_enabled" {% if settings.bank_hours_enabled=='1' %}checked{% endif %}> Usar banco de horas</label>
 <label class="check"><input type="checkbox" name="consider_holidays" {% if settings.consider_holidays=='1' %}checked{% endif %}> Considerar feriados cadastrados</label>
-</div></div>
+</div>
+<div class="notice success" style="display:block;margin-top:16px;">
+  <strong>Jornada normal de sábado: 04:00</strong>
+  <div class="help" style="margin-top:4px;">Para competências novas e abertas, o sábado é apurado com 4 horas de jornada normal. Exemplo: se o colaborador trabalhar 06:40 no sábado, serão 04:00 de jornada normal + 02:00 de HE {{ settings.overtime_weekday_percent }}% + 00:40 de HE 100%.</div>
+</div>
+<div class="notice" style="display:block;margin-top:16px;">
+  <strong>Regra de limite diário de hora extra</strong>
+  <div class="help" style="margin-top:4px;">Depois de cumprida a jornada normal do dia, até 2 horas extras permanecem na faixa normal configurada acima. Todo excedente após essas 2 horas é classificado automaticamente como HE 100%. Sem banco de horas, domingos e feriados permanecem na categoria de HE 100%.</div>
+</div>
+</div>
 <div class="card"><h2>Faixa noturna</h2><div class="form-grid three"><label class="check"><input type="checkbox" name="night_shift_enabled" {% if settings.night_shift_enabled=='1' %}checked{% endif %}> Habilitar controle noturno</label><label>Início<input type="time" name="night_start" value="{{ settings.night_start }}"></label><label>Fim<input type="time" name="night_end" value="{{ settings.night_end }}"></label></div><p class="help">Nesta primeira versão a faixa noturna fica cadastrada para evolução do cálculo; a apuração de adicional noturno não é aplicada automaticamente ainda.</p></div>
 <div class="card"><h2>Feriados</h2><p class="help">Um por linha no formato <code>AAAA-MM-DD | Descrição</code>.</p><textarea name="holidays" rows="8" placeholder="2026-09-20 | Revolução Farroupilha">{{ holiday_text }}</textarea></div>
 <div class="savebar"><button class="button primary" type="submit">Salvar configurações</button></div>
 </form>
+
+<div class="card" id="backup-restauracao">
+  <div class="section-head">
+    <div>
+      <h2>Backup e restauração</h2>
+      <p>Transfira a operação para outra máquina ou preserve uma cópia completa antes de qualquer manutenção.</p>
+    </div>
+  </div>
+  <div class="form-grid two" style="align-items:start;">
+    <div>
+      <h3 style="margin-top:0;">Baixar backup completo</h3>
+      <p class="help">Gera um único arquivo ZIP com o banco SQLite, colaboradores, batidas, jornadas, competências fechadas, configurações, cadastro do REP, AFDs armazenados e PDFs arquivados.</p>
+      <a class="button primary" href="/backup/download">Baixar backup completo</a>
+    </div>
+    <div>
+      <h3 style="margin-top:0;">Restaurar um backup</h3>
+      <p class="help">O Atlas valida o ZIP e a integridade do SQLite antes de alterar qualquer dado. Também cria automaticamente um backup da base atual antes da restauração.</p>
+      <form method="post" action="/backup/restore" enctype="multipart/form-data" onsubmit="return confirm('Restaurar este backup substituirá a base atual desta máquina. O Atlas criará uma cópia de segurança antes de continuar. Deseja prosseguir?');">
+        <label>Arquivo de backup do Atlas Ponto<input type="file" name="file" accept=".zip,application/zip" required></label>
+        <div style="margin-top:12px;"><button class="button ghost" type="submit">Restaurar backup</button></div>
+      </form>
+    </div>
+  </div>
+  <div class="notice" style="display:block;margin-top:18px;">
+    <strong>Para migrar do Mac para o Windows</strong>
+    <div class="help" style="margin-top:4px;">No Mac: atualize o Atlas e clique em <b>Baixar backup completo</b>. No Windows: instale o Atlas Ponto, abra Configurações e use <b>Restaurar backup</b>. Não é necessário entrar em pastas nem copiar o arquivo <code>ponto.db</code> manualmente.</div>
+  </div>
+</div>
 {% endblock %}

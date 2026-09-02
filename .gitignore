@@ -1,0 +1,12 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+
+data/*.db
+data/*.log
+data/closed_reports/
+data/backups/
+uploads/*
+!uploads/.gitkeep
